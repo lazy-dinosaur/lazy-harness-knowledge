@@ -55,6 +55,12 @@ Order (each step keeps its own tests green before the next):
    capture producer was not found in the source folder. `run-tests.sh` runs each package in its own process. Original:
    `hosts/pi` — `writer_host.mjs`, `active_worker_host.mjs`, `active_worker_transport.py`, `writer_transport.py` and their
    offline tests.
-4. `packages/eval` — stage runner and probes, code only; run outputs stay in lazy-harness `.local`.
+4. **done (issue #6, PRs #7–#10)** — run scopes → `core/src/scopes.py`; the core-used half of `pipeline.py` →
+   `core/src/generation.py`; last core → experiment imports cut (host id `scopes.LOCAL_HOST`, embedding precompute
+   classified as core, catalog draft gets its document list from the caller); `prepare`, `pipeline`, `reembed`, `calibrate`,
+   `calibration_evidence`, `report`, `area_report`, `fresh`, `run_paid_pilot`, `local_db` → `packages/eval/src`.
+   `core/tests/test_boundaries.py` enforces: core imports neither eval nor host, host imports no eval, no pi-fabric.
+   Six core test files still exercise eval in the same file (test-only path, split tracked in #6). Original text:
+   `packages/eval` — stage runner and probes, code only; run outputs stay in lazy-harness `.local`.
 5. Port contracts + fake conformance tests (issue #1 P4); the pi-fabric implementation is lazy-harness work.
 6. lazy-harness keeps a thin consumer only.
