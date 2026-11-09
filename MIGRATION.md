@@ -20,6 +20,25 @@ Order (each step keeps its own tests green before the next):
    files as fixtures or results (`scale-04/plan.json`, `capture-01/s1b-claims-flat.json`, `scale-01/records.json`,
    `read-01/questions.json`, `subject-criteria-01/results2.json`, …), decide whether history-specific modules
    (`task314_*` … `task318_*`) are needed by the product path, and classify the pre-existing stale offline failures.
+   **P0 findings (read-only, 2026-11-07):**
+   - History chain: `source_role_contract.py` imports `ExecutionReceipt` from `task314_execution.py`, which pulls 8 history
+     recovery modules (`task314_*`, `task316_*`, `task317_*`, `task318_*`) into the product closure through
+     `pipeline → active_worker → writer_worker → source_context_policy → source_anchor_proof → source_role_contract`.
+     `task314_execution.py` also hard-codes a lazy-harness-local execution directory. Plan: move `ExecutionReceipt` into a
+     neutral core module in this repository and leave the history modules in lazy-harness.
+   - Host names: host-specific host/container ids in `local_db.py`, `prepare.py`, `pipeline.py` and
+     `test_placement_decisions_offline.py`; an absolute user home path in `pipeline.py`. Plan: neutral configurable
+     defaults; no host name or user path in this repository.
+   - Data files: product code reads only the run state `state/plan.json` at runtime; the asset `scale-04/plan.json`
+     (records, questions, caps, estimates) and `prepare.py`'s inputs (`capture-01/s1b-claims-flat.json`,
+     `scale-01/records.json`, `read-01/questions.json`, `baselines-64.json`, `restore-report.json`, `fragmenter/prompt-v3.md`)
+     are experiment inputs/results built from host documents — none is copied. `subject-criteria-01/results2.json` (read by
+     `test_placement_decisions_offline.py`) is historical judgement output — replaced by a synthetic fixture.
+   - Offline test baseline in the source folder (47 files): 41 green; failing — `test_feature_subjects` 1,
+     `test_hierarchy` 1, `test_jev_state_choice` 3 (`('jev','selection') != ('jev','placement')` wire label), `test_pilot_repairs` 1,
+     `test_split_ground` 1; `test_extraction_provenance` is a standalone (`env -i`) test that does not collect under pytest.
+     These are carried as known failures, each to be fixed or dropped with a reason, not copied as silently failing.
+
 2. `packages/core` — the closure's engine/criteria/store modules with their offline tests; the 8 bundles stay green
    (`test_umbrella`, `test_place_write`, `test_input_extract_domain`, `test_active_worker`, `test_numbered_domain`,
    `test_stagewise`, `test_domain_membership`, `test_placement_decisions`).
