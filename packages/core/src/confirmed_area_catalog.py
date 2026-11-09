@@ -5,7 +5,7 @@ import argparse
 import sys
 from safety import RUNNER, load, save, digest, Stop, exclusive
 sys.path.insert(0, str(RUNNER))
-from prepare import AREA_SCOPES, scope_home
+from scopes import AREA_SCOPES, scope_home
 from area_catalog import areas
 
 # Neutral example catalog (public repository). A host supplies its own user-confirmed list; the lazy-harness host

@@ -1,7 +1,7 @@
 """Area catalog: one draft call, explicit Main confirmation, then domain seeds."""
 import re
 from safety import load, save, digest, Stop
-from prepare import source_home
+from scopes import source_home
 
 PILOT_TEN = ('R11','R21','R08','R12','R20','R03','R13','R22','R36','R05')
 

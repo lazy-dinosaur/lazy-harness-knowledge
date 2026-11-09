@@ -14,26 +14,9 @@ CAPS = {'generation':12., 'absorption':150., 'maintenance':100., 'quality':50.,
 PILOT_CAPS = {'generation':.5, 'absorption':5., 'maintenance':4., 'quality':4.,
               'reading':10.5, 'judging':.8, 'embedding':.2}
 
-SCOPES = ('full', 'pilot', 'pilot-fresh', 'pilot-feature', 'pilot-area-10', 'pilot-area',
-          'pilot-area-10-isolated', 'pilot-area-10-unit1-current')
-AREA_SCOPES = ('pilot-area-10', 'pilot-area', 'pilot-area-10-isolated', 'pilot-area-10-unit1-current')
-TEN_SCOPES = ('pilot-area-10', 'pilot-area-10-isolated', 'pilot-area-10-unit1-current')
-PRIOR_REQUIRED_SCOPES = ('pilot-area-10-isolated', 'pilot-area-10-unit1-current')
-FRESH_SCOPES = tuple(s for s in SCOPES if s not in ('full', 'pilot'))
+from scopes import (SCOPES, AREA_SCOPES, TEN_SCOPES, PRIOR_REQUIRED_SCOPES, FRESH_SCOPES,
+                    scope_home, source_home, default_runs)  # re-exported for experiment callers
 
-def scope_home(scope):
-    if scope not in SCOPES: raise ValueError('invalid scope')
-    home = HERE/scope if scope != 'full' else HERE
-    if scope != 'full' and home.resolve() != HERE.resolve()/scope:
-        raise ValueError('scope must remain inside the source root')
-    return home
-
-def source_home(home):
-    return home.parent if home.name in SCOPES[1:] else home
-
-def default_runs(scope):
-    if scope not in SCOPES: raise ValueError('invalid scope')
-    return 1 if scope != 'full' else 3
 
 def inputs(scope='full'):
     if scope not in SCOPES: raise ValueError('invalid scope')

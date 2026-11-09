@@ -3,7 +3,7 @@ import json
 from safety import HERE, RUNNER, load, save
 import sys
 sys.path.insert(0, str(RUNNER))
-from prepare import scope_home
+from scopes import scope_home
 
 def report(home=None):
     home=home or HERE

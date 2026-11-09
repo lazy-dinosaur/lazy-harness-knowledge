@@ -10,7 +10,7 @@ from typing import Callable
 from uuid import uuid5, NAMESPACE_URL
 from safety import RUNNER, ROOT, Stop, digest, load, save
 sys.path.insert(0, str(RUNNER))
-from prepare import source_home
+from scopes import source_home
 from ddd_criterion import DDD2, DDD_FOR_AUTHOR, DOMAIN_CRITERION, DOMAIN_QUESTION, DOMAIN_SAME_QUESTION, assert_calibrated
 from subject_contract import unit_first_metadata
 from model_output import ModelOutputInvalid
