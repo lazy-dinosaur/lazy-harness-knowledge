@@ -1,0 +1,11 @@
+# Experiment result data is never committed (user-confirmed 2026-11-07).
+.local/
+.state/
+runs/
+results/
+*.dump
+*.log
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
