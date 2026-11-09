@@ -8,7 +8,7 @@ from safety import HERE, RUNNER, Stop, save, load
 
 IMAGE='public.ecr.aws/supabase/postgres:17.6.1.134'
 NAME='lh-knowledge-local-local'
-HOST='knowledge-local'
+from scopes import LOCAL_HOST as HOST
 MIGRATIONS=['0001_knowledge_init','0002_search_and_cost','0003_embedding_hybrid','0004_work_unit_baseline',
  '0005_domain_type','0006_rules','0007_harness_rules_out','0008_embedding_any_dim','0009_subject_dictionary',
  '0010_fact_form','0011_structure_fill_once','0012_contradiction_resolution','0013_declared_alias',

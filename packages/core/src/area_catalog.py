@@ -22,13 +22,11 @@ def areas(value):
         if not isinstance(description,str) or not 1<=len(description.strip())<=300 or '\n' in description: raise Stop('invalid area description')
     return rows
 
-def draft(plan,home,paid):
+def draft(plan,home,paid,records):
+    """records: the documents to show the catalog drafter (the experiment caller supplies them)."""
     import generation as p
     path=home/'state/area-catalog-draft.json'
     if path.exists(): return load(path)
-    # Use all 55 pilot documents even for the ten-document screen.
-    from prepare import inputs
-    records,_=inputs('pilot-area')
     docs=[]
     for r in records:
         text=(source_home(home)/'v1'/r['path']).read_text()
