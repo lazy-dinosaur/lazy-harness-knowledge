@@ -41,7 +41,7 @@ def apply_fact(original, mapping, hint):
 
 
 def run(plan, home, paid):
-    import pipeline as p
+    import generation as p
     from area_catalog import confirmed
     confirmed(plan, home)
     if not plan.get('subject_shorten'): raise Stop('subject-shorten not enabled by plan')
@@ -150,7 +150,7 @@ def retry_once(home, rid, generated, paid):
     """One extra subscription attempt per affected record, including lint errors.
     Separate immutable receipt prevents repeats after failure or process restart.
     """
-    import pipeline as p
+    import generation as p
     distinct = {}
     for fact in generated.get('facts', []):
         for obj in objects(fact):

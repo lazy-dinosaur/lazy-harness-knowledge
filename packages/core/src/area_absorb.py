@@ -39,7 +39,7 @@ def assigned_area(plan, home, dsn, host, record, generated, adapters):
 
 
 def project_holds(record, receipt):
-    from pipeline import disposition
+    from generation import disposition
     held = receipt.get('held_facts', [])
     indices = receipt.get('recorded_indices', [])
     record['held_facts'] = held
