@@ -7,6 +7,11 @@ Records stay in lazy-harness: `.lazy-harness/planning/v2-knowledge-module-extrac
 (placement rules), `.lazy-harness/spec/v2-knowledge-ddd-structure.md` (structure contract),
 `.lazy-harness/ssot/paid-run-cash-caps.md` (paid-run limits), main `.lazy-harness/ssot/project-identity.md` (module boundary).
 
+Public repository (user decision 2026-11-07): no host-derived content is committed. The test source documents used in
+lazy-harness (S002, S003, R01) come from a downstream host and stay out; every fixture copied here must be neutral or
+synthetic (the same neutral-example rule the judgement prompts already follow). Measurement against real host documents
+stays a lazy-harness activity.
+
 Order (each step keeps its own tests green before the next):
 
 1. **P0 in progress** — layout and ignore rules (this PR). Inventory: Python import closure of `scale-04/place_write.py`,
