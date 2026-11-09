@@ -48,7 +48,12 @@ Order (each step keeps its own tests green before the next):
    `packages/core` — the closure's engine/criteria/store modules with their offline tests; the 8 bundles stay green
    (`test_umbrella`, `test_place_write`, `test_input_extract_domain`, `test_active_worker`, `test_numbered_domain`,
    `test_stagewise`, `test_domain_membership`, `test_placement_decisions`).
-3. `hosts/pi` — `writer_host.mjs`, `active_worker_host.mjs`, `active_worker_transport.py`, `writer_transport.py` and their
+3. **done in PR `hosts-pi`** — `writer_host.mjs`, `active_worker_host.mjs`, `writer_transport.py`, `active_worker_transport.py`
+   moved to `hosts/pi/src`; the core reaches them only at runtime by module name (`host_defaults.py`, explicit
+   `HostUnavailable` error) or through injected factories; `hosts/pi` may import the core, never the reverse. The Node
+   replay test runs against the installed Pi runtime (skipped without Pi); the writer replay test is skipped because its
+   capture producer was not found in the source folder. `run-tests.sh` runs each package in its own process. Original:
+   `hosts/pi` — `writer_host.mjs`, `active_worker_host.mjs`, `active_worker_transport.py`, `writer_transport.py` and their
    offline tests.
 4. `packages/eval` — stage runner and probes, code only; run outputs stay in lazy-harness `.local`.
 5. Port contracts + fake conformance tests (issue #1 P4); the pi-fabric implementation is lazy-harness work.
