@@ -39,7 +39,13 @@ Order (each step keeps its own tests green before the next):
      `test_split_ground` 1; `test_extraction_provenance` is a standalone (`env -i`) test that does not collect under pytest.
      These are carried as known failures, each to be fixed or dropped with a reason, not copied as silently failing.
 
-2. `packages/core` — the closure's engine/criteria/store modules with their offline tests; the 8 bundles stay green
+2. **done in PR `core-migration`** — 95 source modules + 10 test files + `migrations/` under `packages/core`; history modules
+   (`task314_*` … `task318_*`) left in lazy-harness (only `source_role_contract`'s history dispatch removed); host ids
+   neutralized (`knowledge-local`), user paths removed (worker-root guard is opt-in via `LH_KNOWLEDGE_WORKER_ROOT`),
+   host-derived catalog/gold/phrases replaced by neutral examples or kept in lazy-harness; result: 150 passed,
+   2 skipped (need experiment inputs → `packages/eval` with synthetic fixtures), 1 expected failure (known source
+   failure). Original text of this step:
+   `packages/core` — the closure's engine/criteria/store modules with their offline tests; the 8 bundles stay green
    (`test_umbrella`, `test_place_write`, `test_input_extract_domain`, `test_active_worker`, `test_numbered_domain`,
    `test_stagewise`, `test_domain_membership`, `test_placement_decisions`).
 3. `hosts/pi` — `writer_host.mjs`, `active_worker_host.mjs`, `active_worker_transport.py`, `writer_transport.py` and their
