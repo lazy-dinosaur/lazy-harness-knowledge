@@ -62,5 +62,8 @@ Order (each step keeps its own tests green before the next):
    `core/tests/test_boundaries.py` enforces: core imports neither eval nor host, host imports no eval, no pi-fabric.
    Six core test files still exercise eval in the same file (test-only path, split tracked in #6). Original text:
    `packages/eval` — stage runner and probes, code only; run outputs stay in lazy-harness `.local`.
-5. Port contracts + fake conformance tests (issue #1 P4); the pi-fabric implementation is lazy-harness work.
-6. lazy-harness keeps a thin consumer only.
+5. **done (issue #6 step 5)** — run state defaults to the ignored `<repo>/.state` (`LH_KNOWLEDGE_STATE_HOME` overrides);
+   experiment inputs are read only from `LH_KNOWLEDGE_INPUTS` (unset → explicit error); the code directory is used only for
+   source hashing.
+6. Port contracts + fake conformance tests (issue #1 P4); the pi-fabric implementation is lazy-harness work.
+7. lazy-harness keeps a thin consumer only.

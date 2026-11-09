@@ -1,5 +1,5 @@
 """Run scopes and their homes (core configuration). Experiment preparation lives in prepare.py."""
-from safety import HERE
+from safety import STATE_HOME as HERE
 
 # Default host id for local runs (neutral; a host passes its own id in the run plan).
 LOCAL_HOST = 'knowledge-local'

@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
-from safety import HERE, ROOT, Ledger, digest, load, save, exclusive
+from safety import STATE_HOME as HERE, ROOT, Ledger, digest, load, save, exclusive
 
 HOME = HERE / 'pilot-area-10'
 PHASES = ('judge','place','write','ground','embed-precompute','absorb','report')

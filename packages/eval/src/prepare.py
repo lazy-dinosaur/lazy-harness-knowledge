@@ -3,7 +3,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
-from safety import HERE, RUNNER, digest, load, save
+from safety import HERE, RUNNER, STATE_HOME, inputs_home, digest, load, save
 import sys
 sys.path.insert(0, str(RUNNER))
 
@@ -20,26 +20,26 @@ from scopes import (SCOPES, AREA_SCOPES, TEN_SCOPES, PRIOR_REQUIRED_SCOPES, FRES
 
 def inputs(scope='full'):
     if scope not in SCOPES: raise ValueError('invalid scope')
-    report = load(HERE/'restore-report.json')
+    report = load(inputs_home()/'restore-report.json')
     assert set(report['excluded_questions']) == EXCLUDED
     records = []
-    for r in load(RUNNER/'scale-01/records.json'):
+    for r in load(inputs_home()/'scale-01/records.json'):
         if r['record_id'] in report['missing']: continue
-        path = (HERE/'v1'/r['path']).resolve()
-        assert path.is_relative_to(HERE/'v1')
+        path = (STATE_HOME/'v1'/r['path']).resolve()
+        assert path.is_relative_to(STATE_HOME/'v1')
         raw = path.read_bytes()
         assert hashlib.sha256(raw).hexdigest() == r['sha256'], r['record_id']
         text = raw.decode()
         title = next((s.lstrip('# ').strip() for s in text.splitlines() if s.startswith('# ')), Path(r['path']).stem)
         records.append({**r,'chars':len(text),'lines':len(text.splitlines()),'title':title})
-    qs = [q for q in load(RUNNER/'read-01/questions.json') if q['qid'] not in EXCLUDED]
+    qs = [q for q in load(inputs_home()/'read-01/questions.json') if q['qid'] not in EXCLUDED]
     assert len(records)==598 and len(qs)==64
-    flat = {c['rid']+':'+c['id']:c['claim'] for c in load(RUNNER/'capture-01/s1b-claims-flat.json')}
-    verdict = {x['id']:x['verdict'] for n in (1,2,3) for x in load(RUNNER/f'scale-03/measure/sol-result-{n}.json')['items']}
+    flat = {c['rid']+':'+c['id']:c['claim'] for c in load(inputs_home()/'capture-01/s1b-claims-flat.json')}
+    verdict = {x['id']:x['verdict'] for n in (1,2,3) for x in load(inputs_home()/f'scale-03/measure/sol-result-{n}.json')['items']}
     for q in qs:
         q['nuggets'] = [n for n in q['nuggets'] if verdict[n] != 'superseded']
         q['claims'] = [flat[n] for n in q['nuggets']]
-        raw = (RUNNER/'read-01/b3-queries'/f"{q['qid']}.raw.txt").read_text()
+        raw = (inputs_home()/'read-01/b3-queries'/f"{q['qid']}.raw.txt").read_text()
         import sys
         sys.path.insert(0,str(RUNNER/'fragmenter'))
         from check_fragments import parse
@@ -58,7 +58,7 @@ def baseline(qs):
     expected = {(q['qid'], n) for q in qs for n in q['nuggets']}
     out = {}
     for label, name in [('single','judged-measure.json'),('mapreduce','judged-measure-raw-mr.json')]:
-        rows = load(RUNNER/'scale-03/measure'/name)
+        rows = load(inputs_home()/'scale-03/measure'/name)
         runs = []
         for run in (1,2,3):
             rr = [r for r in rows if r['run']==run and (r['qid'],r['nugget']) in expected]
@@ -67,7 +67,7 @@ def baseline(qs):
                          'contradicted':sum(r['contradicted']>=.7 for r in rr)})
         rates = [r['covered']/r['n'] for r in runs]
         out[label] = {'runs':runs,'mean':sum(rates)/3,'range':[min(rates),max(rates)],
-                      'source_sha256':hashlib.sha256((RUNNER/'scale-03/measure'/name).read_bytes()).hexdigest()}
+                      'source_sha256':hashlib.sha256((inputs_home()/'scale-03/measure'/name).read_bytes()).hexdigest()}
     return out
 
 def estimate(records,qs,runs=3):

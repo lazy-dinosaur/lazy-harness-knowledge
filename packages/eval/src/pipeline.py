@@ -9,7 +9,7 @@ import sys
 import time
 import threading
 from uuid import uuid5, NAMESPACE_URL
-from safety import HERE, RUNNER, ROOT, Ledger, Paid, Stop, digest, exclusive, load, save
+from safety import STATE_HOME as HERE, RUNNER, ROOT, Ledger, Paid, Stop, digest, exclusive, load, save
 sys.path.insert(0,str(RUNNER))
 from local_db import HOST, database
 from model_output import ModelOutputInvalid
