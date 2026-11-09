@@ -3,7 +3,6 @@ import re
 from safety import load, save, digest, Stop
 from scopes import source_home
 
-PILOT_TEN = ('R11','R21','R08','R12','R20','R03','R13','R22','R36','R05')
 
 def areas(value):
     rows=value.get('areas')

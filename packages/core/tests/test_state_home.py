@@ -32,3 +32,15 @@ class StateHome(unittest.TestCase):
             importlib.reload(safety)
             with self.assertRaisesRegex(RuntimeError, 'LH_KNOWLEDGE_INPUTS'):
                 safety.inputs_home()
+
+    def test_scope_homes_resolve_under_the_default_state_home(self):
+        import scopes
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop('LH_KNOWLEDGE_STATE_HOME', None)
+            importlib.reload(safety); importlib.reload(scopes)
+            try:
+                self.assertEqual(scopes.scope_home('pilot'), (REPO / '.state' / 'pilot').resolve())
+                self.assertEqual(scopes.scope_home('full'), (REPO / '.state').resolve())
+                self.assertEqual(scopes.source_home(scopes.scope_home('pilot')), (REPO / '.state').resolve())
+            finally:
+                importlib.reload(safety); importlib.reload(scopes)

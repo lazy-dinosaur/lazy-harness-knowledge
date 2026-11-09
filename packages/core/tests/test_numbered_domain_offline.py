@@ -72,12 +72,12 @@ class NumberedDomain(unittest.TestCase):
             ledger.append({'id':'old','step':'absorption','state':'released','account':'cash','charge':.3});ledger.call('embedding','first',.1,lambda:{},lambda _:.1)
             with self.assertRaisesRegex(Stop,'total cash'):ledger.call('absorption','second',.101,lambda:self.fail('effect forbidden'))
             self.assertAlmostEqual(sum(ledger.spent(s,'cash') for s in ledger.caps),.4)
-    @unittest.skip('needs experiment inputs (restore report, host records) not shipped here; moves to packages/eval with a synthetic fixture')
     def test_restart_freezes_prior_cash_and_preserves_total_cap(self):
         import os, prepare
+        from test_offline import synthetic_inputs
         with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as tmp:
             home=Path(tmp)/'pilot-area-10'
-            with patch.object(prepare,'scope_home',return_value=home),patch.dict(os.environ,{'LH_PILOT_CASH_PRIOR_USD':'0.020433574'}):
+            with synthetic_inputs(),patch.object(prepare,'scope_home',return_value=home),patch.dict(os.environ,{'LH_PILOT_CASH_PRIOR_USD':'0.020433574'}):
                 prepare.prepare('pilot-area-10')
             from safety import load
             plan=load(home/'plan.json')
@@ -85,7 +85,7 @@ class NumberedDomain(unittest.TestCase):
             available=plan['cash_caps']['total_usd']-plan['cash_caps']['prior_spent_usd']
             ledger=Ledger(home/'state/paid.jsonl',digest(plan),plan['caps'],cash_limit=available)
             with self.assertRaisesRegex(Stop,'total cash'):ledger.admit_cash(.48)
-            with patch.object(prepare,'scope_home',return_value=home),patch.dict(os.environ,{'LH_PILOT_CASH_PRIOR_USD':'-1'}):
+            with synthetic_inputs(),patch.object(prepare,'scope_home',return_value=home),patch.dict(os.environ,{'LH_PILOT_CASH_PRIOR_USD':'-1'}):
                 with self.assertRaisesRegex(ValueError,'prior pilot cash'):prepare.prepare('pilot-area-10')
 
     def test_readback_invocation_and_retry_limits(self):

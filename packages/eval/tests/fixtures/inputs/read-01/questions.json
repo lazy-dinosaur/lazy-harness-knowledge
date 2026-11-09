@@ -1,0 +1,24 @@
+[
+ {
+  "qid": "Q1",
+  "question": "주문은 언제 취소할 수 있나?",
+  "nuggets": [
+   "S1:c1"
+  ]
+ },
+ {
+  "qid": "Q2",
+  "question": "배송은 언제 시작되나?",
+  "nuggets": [
+   "S2:c1",
+   "S2:c2"
+  ]
+ },
+ {
+  "qid": "Q9",
+  "question": "제외된 질문",
+  "nuggets": [
+   "S3:c1"
+  ]
+ }
+]

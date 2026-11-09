@@ -1,0 +1,15 @@
+{
+ "note": "synthetic neutral corpus for offline tests",
+ "excluded_questions": [
+  "Q9"
+ ],
+ "expected": {
+  "records": 3,
+  "questions": 2,
+  "pilot_records": 2,
+  "ten_records": 1
+ },
+ "pilot_ten": [
+  "S2"
+ ]
+}
