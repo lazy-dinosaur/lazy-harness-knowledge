@@ -380,16 +380,13 @@ def ranked(kind, unit, catalog, ports, k, *, full_content=False):
 
 
 def probabilities(scores, options):
-    if set(scores)!=set(options) or any(type(v) not in (float,int) or not math.isfinite(v) or not 0<=v<=1 for v in scores.values()):
-        raise Stop('invalid typed probabilities')
-    return scores
+    import ports as _contract
+    return _contract.check_choice(scores, options)
 
 
 def score(ports, state, question):
-    values = ports.ask(state,['candidate'],question)
-    if len(values)!=1 or type(values[0]) not in (float,int) or not math.isfinite(values[0]) or not 0<=values[0]<=1:
-        raise Stop('invalid typed Noul score')
-    return values[0]
+    import ports as _contract
+    return _contract.check_ask(ports.ask(state,['candidate'],question), 1)[0]
 
 
 # Task363 P3: same-state comparison questions are batched (up to Ports.batch_questions per physical Jev call) instead
