@@ -99,13 +99,16 @@ def run_extract(ports, records, *, host, out=None):
 
 # ---------------------------------------------------------------- stages 2-3: domain and subject placement
 
-def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, skip_units=None):
+def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, skip_units=None, second_pass=False):
     """Stages 2 (domain) and 3 (subject) from a user-passed extract report and a named snapshot.
 
     Mirrors place_write.run: domain first, then subject inside the chosen domain; successful choices update the
     in-run catalogs exactly as the pipeline does. HOLDs stay HOLDs (no rescue path).
     Task380c: `on_row(index, row, domains, subjects)` is called after every unit so a caller can persist progress;
     a run stopped midway keeps every judged unit (identical requests are answered from the ledger on rerun).
+    second_pass (S003 review, user "추천대로 진행해줘"): after all units, units held at the domain or subject step are placed
+    ONCE more against the catalog grown during the run (a shared-kernel domain created late can then take the earlier
+    units). Held rows keep their first-pass hold as `first_hold`; extract-flagged and carried units are never retried.
     """
     baseline_ports(ports)
     _approved(extract_report, 'extract')
@@ -113,16 +116,9 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
     domains = copy.deepcopy(base['domains'])
     subjects = copy.deepcopy(base['subjects'])
     rows = []
-    for row in extract_report['rows']:
+
+    def place_unit(row):
         unit = row['unit']; placement = {}
-        reason = (skip_units or {}).get(unit['unit_id'])
-        if row['flags'] or reason:
-            # Task382: a unit whose paid call is carried as uncertain is held without any new call (no resend).
-            rows.append({'unit_id': unit['unit_id'], 'record_id': row['record_id'], 'index': row['index'],
-                         'held': {'where': 'carried' if reason else 'extract', 'reason': reason or ','.join(row['flags'])}})
-            if on_row is not None:
-                on_row(len(rows) - 1, rows[-1], domains, subjects)
-            continue
         text = extract_report['sources'][row['record_id']]
         held = None
         for kind in ('domain', 'subject'):
@@ -144,14 +140,34 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
                 catalog.append(copy.deepcopy(chosen))
             else:
                 catalog[found] = copy.deepcopy(chosen)
-        rows.append({'unit_id': unit['unit_id'], 'record_id': row['record_id'], 'index': row['index'],
-                     'content': unit['content'], 'target_expression': unit['target_expression'],
-                     'domain': summary(placement.get('domain')), 'subject': summary(placement.get('subject')),
-                     'held': held, 'trace': placement})
+        return {'unit_id': unit['unit_id'], 'record_id': row['record_id'], 'index': row['index'],
+                'content': unit['content'], 'target_expression': unit['target_expression'],
+                'domain': summary(placement.get('domain')), 'subject': summary(placement.get('subject')),
+                'held': held, 'trace': placement}
+
+    for row in extract_report['rows']:
+        unit = row['unit']
+        reason = (skip_units or {}).get(unit['unit_id'])
+        if row['flags'] or reason:
+            # Task382: a unit whose paid call is carried as uncertain is held without any new call (no resend).
+            rows.append({'unit_id': unit['unit_id'], 'record_id': row['record_id'], 'index': row['index'],
+                         'held': {'where': 'carried' if reason else 'extract', 'reason': reason or ','.join(row['flags'])}})
+        else:
+            rows.append(place_unit(row))
         if on_row is not None:
             on_row(len(rows) - 1, rows[-1], domains, subjects)
+    if second_pass:
+        by_id = {r['unit']['unit_id']: r for r in extract_report['rows']}
+        for i, done in enumerate(rows):
+            if not done.get('held') or done['held']['where'] not in ('domain', 'subject'):
+                continue
+            again = place_unit(by_id[done['unit_id']])
+            again['pass'] = 2; again['first_hold'] = done['held']
+            rows[i] = again
+            if on_row is not None:
+                on_row(i, rows[i], domains, subjects)
     report = _sealed({'version': VERSION, 'stage': 'place', 'snapshot': base['name'], 'snapshot_sha': base['sha'],
-                      'extract_sha': extract_report['sha'], 'rows': rows,
+                      'extract_sha': extract_report['sha'], 'rows': rows, 'second_pass': bool(second_pass),
                       'domains_after': domains, 'subjects_after': subjects,
                       # Task385: upper-grouping candidates (link layer; never a same-level domain, never a copy of knowledge)
                       'umbrella_candidates': [dict(r['domain']['umbrella'], unit_id=r['unit_id']) for r in rows if r.get('domain') and r['domain'].get('umbrella')]})
