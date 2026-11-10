@@ -29,6 +29,11 @@ class Boundaries(unittest.TestCase):
         bad = {p.name: sorted(imports(p) & forbidden) for p in (REPO / 'packages/core/tests').glob('*.py') if imports(p) & forbidden}
         self.assertEqual(bad, {})
 
+    def test_core_tests_import_no_host(self):
+        forbidden = modules('hosts/pi/src')
+        bad = {p.name: sorted(imports(p) & forbidden) for p in (REPO / 'packages/core/tests').glob('*.py') if imports(p) & forbidden}
+        self.assertEqual(bad, {})
+
     def test_host_imports_no_eval(self):
         forbidden = modules('packages/eval/src')
         bad = {p.name: sorted(imports(p) & forbidden) for p in (REPO / 'hosts/pi/src').glob('*.py') if imports(p) & forbidden}
