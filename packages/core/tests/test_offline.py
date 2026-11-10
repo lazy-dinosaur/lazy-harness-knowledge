@@ -32,6 +32,7 @@ sys.modules['psycopg'] = _offline_driver
 import safety
 from safety import Ledger, Paid, Stop, digest, load, save
 import pipeline as p
+import generation
 import prepare
 
 class Offline(unittest.TestCase):
@@ -108,7 +109,7 @@ class Offline(unittest.TestCase):
             def __enter__(self):return self
             def __exit__(self,*a):pass
             def cursor(self):return Cursor()
-        with patch.object(p,'HERE',self.root),patch.object(store_pg,'connect',return_value=Conn()),patch.object(store_pg,'review_list',return_value=[]):
+        with patch.object(p,'HERE',self.root),patch.object(generation,'HERE',self.root),patch.object(store_pg,'connect',return_value=Conn()),patch.object(store_pg,'review_list',return_value=[]):
             result=p.readback({'records':[{'record_id':'R1','path':'a','sha256':'x'}]},'fake')
         self.assertFalse(result['complete']);self.assertEqual(result['counts']['held'],1)
         self.assertEqual(result['records'][0]['expected_facts'],2)
@@ -117,7 +118,7 @@ class Offline(unittest.TestCase):
         record={'path':'a.md','sha256':'sha'}
         answer={'partition_key':'예약','facts':[{'kind':'fact','subject':'예약','subject_type':'기능','subject_description':'예약 가능 여부를 관리하는 기능','fact':'예약은 가능하다',
                 'reason':'동작 보존','source_ranges':[[1,1]]}]}
-        with patch.object(p,'HERE',self.root):
+        with patch.object(p,'HERE',self.root),patch.object(generation,'HERE',self.root):
             got=p.checked_facts(record,answer)
             self.assertEqual(got['facts'][0]['evidence_refs'][0]['quote'],'예약은 가능하다.')
             answer['facts'][0]['source_ranges']=[[0,2]]

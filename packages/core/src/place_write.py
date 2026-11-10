@@ -865,7 +865,7 @@ def fact_kind(ports, unit, answer, *, source=None):
 
 @unit_first_metadata()
 def validate_fact(record, home, unit, placement, patch, original=None):
-    import pipeline as p, runner
+    import generation as p, runner
     raw = copy.deepcopy(original or {}); raw.update(copy.deepcopy(patch))
     from source_modality import require
     require(raw.pop('_source_modality', None), unit, raw.get('fact'), raw.get('kind'), source(record, home))

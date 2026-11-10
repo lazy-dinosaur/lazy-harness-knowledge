@@ -105,7 +105,7 @@ def install(plan, home, dsn, host, completion, encode):
 
 @unit_first_metadata()
 def absorb(plan, home, dsn, paid, cfg, host):
-    import pipeline as p, store_pg as pg, knowledge_cli as cli, digest_driver as dd, worktime_driver as wd, embed
+    import generation as p, store_pg as pg, knowledge_cli as cli, digest_driver as dd, worktime_driver as wd, embed
     from precompute import assert_completed as precomputed
     completion = assert_completed(plan,home)  # before any DB effect
     precomputed(plan,home)

@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 import pipeline as p
+import generation
 import place_write as w
 import active_worker as c
 import active_worker_transport as t
@@ -155,7 +156,7 @@ class ActiveContracts(unittest.TestCase):
         self.assertEqual(maintenance['describe'](evidence('describe')),'기존 보존')
         self.assertEqual(maintenance['merge_luna'](evidence('merge-luna'))['relation'],'unknown')
         self.assertEqual(seen,[c.PROMPTS['describe'],c.PROMPTS['merge-luna']])
-        with tempfile.TemporaryDirectory() as tmp,patch.object(p,'HERE',Path(tmp)):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(p,'HERE',Path(tmp)),patch.object(generation,'HERE',Path(tmp)):
             def broken(role,snapshot): raise ModelOutputInvalid('malformed paid response')
             _,maintenance=p.adapters(CFG,Mock(scope='test'),worker_factory=lambda paid:broken)
             with self.assertRaises(ModelOutputInvalid): maintenance['describe'](evidence('describe'))
@@ -171,7 +172,7 @@ class ActiveContracts(unittest.TestCase):
                 if not sql.lstrip().startswith('select '): raise AssertionError('failed description must not write')
             def fetchall(self):
                 return [('subject-ref','배송함','기존 설명','entity')] if 'select subject_id' in queries[-1] else copy.deepcopy(old_evidence)
-        with tempfile.TemporaryDirectory() as tmp,patch.object(p,'HERE',Path(tmp)):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(p,'HERE',Path(tmp)),patch.object(generation,'HERE',Path(tmp)):
             def failed(role,snapshot): raise ModelOutputInvalid('journaled malformed output')
             _,maintenance=p.adapters(CFG,Mock(scope='test'),worker_factory=lambda paid:failed)
             with patch.object(domain_router,'lock_partition'),patch.object(embedding_guard,'assert_host'):
@@ -386,7 +387,7 @@ class ActualController(unittest.TestCase):
             plan={'write_path':2,'host':'synthetic-host','records':[record],'candidate_policy':{'top_k':5},'area_catalog':True,'embedding_precompute':True,'fresh_database':True}
             save(home/'state/plan.json',plan)
             save(home/'state/area-catalog.json',{'confirmed_by_user':True,'plan_sha':digest(plan),'areas':[{'name':'업무','description':'저장 업무 영역'}]})
-            with patch.object(p,'HERE',home):
+            with patch.object(p,'HERE',home),patch.object(generation,'HERE',home):
                 w.run('judge',plan,home,Mock(),ports)
                 complete=w.assert_completed(plan,home)
                 for phase in ('place','write','ground'): w.run(phase,plan,home,Mock(),ports)

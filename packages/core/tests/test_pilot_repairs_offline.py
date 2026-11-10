@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 import pipeline as p
+import generation
 import knowledge_cli as cli
 import store_pg as pg
 import subject_dict as sd
@@ -121,7 +122,7 @@ class PilotRepairs(unittest.TestCase):
         name='채팅방 캐시 overlay 권한 정책'
         g={'partition_key':name,'facts':[fact(name)]}
         answer={'items':[{'original':name,'name':'캐시 권한 정책','description':'시트 확대 기능'}]}
-        with patch.object(p,'packet_model',return_value=(answer,{})) as model:
+        with patch.object(generation,'packet_model',return_value=(answer,{})) as model:
             out, result=shorten.retry_once(self.home,'R03',g,Mock())
             again,_=shorten.retry_once(self.home,'R03',g,Mock())
         model.assert_called_once()
@@ -134,13 +135,13 @@ class PilotRepairs(unittest.TestCase):
 
     def test_retry_failure_persists_without_more_calls(self):
         g={'partition_key':'채팅','facts':[fact('채팅방 캐시 overlay 권한 정책')]}
-        with patch.object(p,'packet_model',return_value=({'items':[]},{})) as model:
+        with patch.object(generation,'packet_model',return_value=({'items':[]},{})) as model:
             out,result=shorten.retry_once(self.home,'R03',g,Mock())
             shorten.retry_once(self.home,'R03',g,Mock())
         model.assert_called_once()
         self.assertEqual(out,g)
         self.assertTrue(result['failures'])
-        with patch.object(p,'packet_model',side_effect=AssertionError('no valid-name retry')):
+        with patch.object(generation,'packet_model',side_effect=AssertionError('no valid-name retry')):
             self.assertEqual(shorten.retry_once(self.home,'R12',{'facts':[fact()]},Mock())[1],{'failures':[]})
 
     def test_absorb_continues_after_one_held_fact(self):
@@ -157,11 +158,11 @@ class PilotRepairs(unittest.TestCase):
             def fetchone(self): return ('active',)
         adapters={'same':Mock(),'embed_fn':Mock(),'choose':Mock(),'confirm':Mock()}
         with patch.object(p,'HERE',self.home),patch.object(p,'source_home',return_value=self.home), \
-             patch.object(p,'adapters',return_value=(adapters,{})),patch.object(area_catalog,'install'), \
+             patch.object(generation,'adapters',return_value=(adapters,{})),patch.object(p,'adapters',return_value=(adapters,{})),patch.object(area_catalog,'install'), \
              patch.object(area_absorb,'assigned_area',return_value='예약'),patch.object(pg,'connect',return_value=AbsorbCursor()), \
              patch.object(cli,'record',return_value=result) as record_call,patch.object(wd,'run_worktime') as work, \
              patch.object(pg,'complete'),patch.object(dd,'run_digestion') as digest_call, \
-             patch.object(p,'maintain',return_value={}),patch.object(embed.CACHE,'stats',return_value={'calls':0}):
+             patch.object(generation,'maintain',return_value={}),patch.object(p,'maintain',return_value={}),patch.object(embed.CACHE,'stats',return_value={'calls':0}):
             p.absorb(plan,'fake',Mock(),{})
         self.assertTrue(record_call.call_args.kwargs['isolate_invalid'])
         self.assertEqual(record_call.call_args.kwargs['assigned_area'],'예약')
@@ -179,7 +180,7 @@ class PilotRepairs(unittest.TestCase):
         g={'source_sha':'sha','partition_key':'채팅','facts':[fact(long)]}
         save(self.home/'state/generated/R03.json',g)
         answer={'items':[{'original':long,'name':'캐시 권한 정책','description':'시트 확대 기능'}]}
-        with patch.object(p,'packet_model',side_effect=[({'items':[]},{}),(answer,{})]) as model:
+        with patch.object(generation,'packet_model',side_effect=[({'items':[]},{}),(answer,{})]) as model:
             report=shorten.run(plan,self.home,Mock())
             again=shorten.run(plan,self.home,Mock())
         self.assertEqual(model.call_count,2)  # initial attempt + exactly one retry
@@ -200,7 +201,7 @@ class PilotRepairs(unittest.TestCase):
         answer={'items':[{'original':long,'name':'캐시 권한 정책','description':'시트 확대 기능'}]}
         receipt={'input_sha':digest(packet),'answer':answer,'usage':{}}
         save(self.home/'state/subject-shorten-cache'/('R03-'+digest(packet)+'.json'),receipt)
-        with patch.object(p,'packet_model',side_effect=AssertionError('exact receipt must be reused')):
+        with patch.object(generation,'packet_model',side_effect=AssertionError('exact receipt must be reused')):
             report=shorten.run(plan,self.home,Mock())
         self.assertFalse(report['failures'])
         self.assertEqual(load(self.home/'state/generated/R03.json')['facts'][0]['subject'],'캐시 권한 정책')

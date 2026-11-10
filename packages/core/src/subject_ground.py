@@ -26,7 +26,7 @@ def merge_rewrite(original, patch):
 
 
 def run(plan, home, paid, ask):
-    import pipeline as p
+    import generation as p
     from subject_shorten import assert_completed as shortened
     from area_catalog import relabel
     if not plan.get('subject_ground'): raise Stop('subject-ground not enabled')

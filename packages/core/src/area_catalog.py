@@ -23,7 +23,7 @@ def areas(value):
     return rows
 
 def draft(plan,home,paid):
-    import pipeline as p
+    import generation as p
     path=home/'state/area-catalog-draft.json'
     if path.exists(): return load(path)
     # Use all 55 pilot documents even for the ten-document screen.
@@ -61,7 +61,7 @@ def install(plan,home,dsn,host,encode):
                 do update set embedding=excluded.embedding''',(host,row['name'],embed.MODEL_ID,sd._vec(vector)))
 
 def name_area(paid,text,hint):
-    import pipeline as p
+    import generation as p
     result,_=p.packet_model(paid,'new-area-'+digest(text)[:20],{'document':text,'hint_only':hint},
         '기존 어느 영역에도 속하지 않는 문서다. 업무 영역 이름은 한 단어·개념 하나, 공백/및/·/슬래시/쉼표 금지. 세부는 한 줄 설명에 둔다. '
         '문서 제목/hint를 그대로 복사하지 않는다. JSON {"areas":[{"name":"영역","description":"설명"}]}',charge_step='maintenance')
