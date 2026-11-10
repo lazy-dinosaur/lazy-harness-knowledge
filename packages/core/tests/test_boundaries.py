@@ -19,7 +19,7 @@ def imports(path):
 
 class Boundaries(unittest.TestCase):
     def test_core_imports_no_eval_and_no_host(self):
-        forbidden = modules('packages/eval/src') | modules('hosts/pi/src') | modules('hosts/jev/src')
+        forbidden = modules('packages/eval/src') | modules('hosts/pi/src') | modules('hosts/jev/src') | modules('hosts/embed/src')
         self.assertTrue(forbidden)
         bad = {p.name: sorted(imports(p) & forbidden) for p in (REPO / 'packages/core/src').glob('*.py') if imports(p) & forbidden}
         self.assertEqual(bad, {})
@@ -37,6 +37,11 @@ class Boundaries(unittest.TestCase):
     def test_core_judgement_modules_do_no_network_io(self):
         for name in ('active_judgements', 'judge_jev', 'digest_driver', 'worker_tools', 'capture_audit', 'runner'):
             self.assertNotIn('urlopen', (REPO / 'packages/core/src' / (name + '.py')).read_text(), name)
+
+    def test_core_does_no_network_io(self):
+        import re
+        bad = [p.name for p in (REPO / 'packages/core/src').glob('*.py') if re.search(r'urlopen\(|AsyncClient\(|client\.post\(', p.read_text())]
+        self.assertEqual(bad, [])
 
     def test_host_imports_no_eval(self):
         forbidden = modules('packages/eval/src')

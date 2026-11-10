@@ -124,7 +124,8 @@ def _encode(texts, role):
         data=json.dumps({"texts": texts, "role": role}).encode("utf-8"),
         headers={"Content-Type": "application/json"}, method="POST")
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        import host_defaults
+        with host_defaults.embedding_http()(request, timeout=30) as response:
             result = json.load(response)
     except (urllib.error.URLError, TimeoutError, OSError) as error:
         if isinstance(error, urllib.error.HTTPError):

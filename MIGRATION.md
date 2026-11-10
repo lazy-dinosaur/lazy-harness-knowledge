@@ -71,5 +71,7 @@ Order (each step keeps its own tests green before the next):
    Mixed test files were split per test case: experiment-runner cases live in `packages/eval/tests/*_eval_offline.py`
    (sharing setUp/helpers from the core case), offline guards in `packages/core/tests/offline_guard.py`; core tests no
    longer see `packages/eval` at all (`test_boundaries.py` also checks core tests).
-6. Port contracts + fake conformance tests (issue #1 P4); the pi-fabric implementation is lazy-harness work.
+6. Port contracts (issue #14): `ports.py`, behaviour kit `port_conformance.py`, judgement transport → `hosts/jev`,
+   embedding transport → `hosts/embed`; the core does no network I/O. Any orchestration-layer implementation of these
+   ports belongs to lazy-harness, not to this repository.
 7. lazy-harness keeps a thin consumer only.
