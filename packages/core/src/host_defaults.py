@@ -40,6 +40,26 @@ def judgement_http():
     return _installed_judgement_http or _factory('jev_http', 'send')
 
 
+_installed_embedding_http = None
+_installed_embedding_remote = None
+
+
+def install_embedding_transport(*, local=None, remote=None):
+    """The composition layer supplies embedding transport. local: send(request, timeout=...) in urlopen shape for the
+    local E5 service; remote: async post(url, headers, body, timeout) -> provider JSON (raises on HTTP/rate-limit errors).
+    None falls back to the embedding host by name."""
+    global _installed_embedding_http, _installed_embedding_remote
+    _installed_embedding_http, _installed_embedding_remote = local, remote
+
+
+def embedding_http():
+    return _installed_embedding_http or _factory('embed_http', 'send')
+
+
+def embedding_remote_post():
+    return _installed_embedding_remote or _factory('embed_http', 'remote_post')
+
+
 def lazy_judgement_http(*args, **kwargs):
     """Call-time resolution so building a judge never needs a host; only sending does."""
     return judgement_http()(*args, **kwargs)

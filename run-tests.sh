@@ -8,3 +8,4 @@ python3 -m pytest -q -p no:cacheprovider hosts/pi/tests --ignore=hosts/pi/tests/
 python3 -m pytest -q -p no:cacheprovider hosts/pi/tests/test_node_hosts.py
 python3 -m pytest -q -p no:cacheprovider packages/eval/tests
 python3 -m pytest -q -p no:cacheprovider hosts/jev/tests
+python3 -m pytest -q -p no:cacheprovider hosts/embed/tests

@@ -18,6 +18,10 @@ never performs that network exchange itself. ``send(request, timeout=...)`` retu
 response (``urllib.request.urlopen`` shape). Order: a transport installed by the composition layer
 (``host_defaults.install_judgement_http``) > the Jev host (``hosts/jev``, ``jev_http.send``) > ``HostUnavailable``.
 
+Embedding transport (``host_defaults.embedding_http`` / ``embedding_remote_post``): the core builds embedding requests
+and validates the vectors; the local E5 exchange and the remote provider exchange belong to ``hosts/embed`` unless the
+composition layer installs its own (``host_defaults.install_embedding_transport``).
+
 Factories a host provides (``host_defaults`` finds them by module name, or callers inject them):
 
 - ``writer_factory(paid) -> writer``

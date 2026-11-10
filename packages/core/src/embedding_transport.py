@@ -52,15 +52,8 @@ def policy():
 
 
 async def send(url, headers, body, attempt, branch):
-    import httpx
-    async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=False) as client:
-        response = await client.post(url, headers=headers, json=body)
-        response.raise_for_status()
-        value = response.json()
-        # Some providers return an explicit rate-limit error in a successful HTTP envelope.
-        error = httpx.HTTPStatusError('provider error envelope', request=response.request, response=response)
-        if rate_limited(error):
-            raise error
+    import host_defaults
+    value = await host_defaults.embedding_remote_post()(url, headers, body, TIMEOUT)
     # Providers may echo the bare model name without the OpenRouter vendor prefix
     # (Perplexity returns 'pplx-embed-v1-0.6b' for 'perplexity/pplx-embed-v1-0.6b').
     if value.get('model', body['model']) not in (body['model'], body['model'].split('/', 1)[-1]):

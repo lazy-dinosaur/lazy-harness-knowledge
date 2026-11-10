@@ -10,6 +10,8 @@ repository so each part is built, tested and released separately, and driven by 
 |---|---|
 | `packages/core` | placement and judgement engine: domain/subject identity, judgement questions and criteria, store contracts, port definitions |
 | `hosts/pi` | Pi model transport only (loads Pi `ModelRuntime`; never creates agent sessions, extensions or tools) |
+| `hosts/jev` | direct Jev HTTP judgement transport |
+| `hosts/embed` | embedding transport (local E5 service, remote provider) |
 | `packages/eval` | stage verification, probes and calibration tools shared by all checks |
 | `migrations`, `deploy` | database schema and deployment |
 
