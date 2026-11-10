@@ -1,5 +1,5 @@
 """Predicate-dimensional regression; synthetic semantic oracles, NO real-model accuracy claim."""
-import test_offline
+import offline_guard as test_offline  # noqa: F401  socket/process guards installed BEFORE application imports
 import copy
 import unittest
 from types import SimpleNamespace

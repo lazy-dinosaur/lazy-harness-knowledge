@@ -9,3 +9,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 node_modules/
+
+# run state written by tests or runs must never be committed
+packages/*/src/state/
+packages/*/tests/state/
