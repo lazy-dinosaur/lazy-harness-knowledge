@@ -18,7 +18,8 @@ import re
 import subprocess
 import time
 from pathlib import Path
-from urllib.request import Request, urlopen
+from urllib.request import Request
+import host_defaults
 from uuid import uuid4
 
 import collect
@@ -41,7 +42,8 @@ def plan_dir():
     return d
 
 
-def make_ask(cfg, http=urlopen):
+def make_ask(cfg, http=None):
+    http = http or host_defaults.lazy_judgement_http
     """ask(state, texts, question) -> list[float]; one Jev request per CHUNK texts, two attempts each."""
     def ask(state, texts, question):
         scores = []

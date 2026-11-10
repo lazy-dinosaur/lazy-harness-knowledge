@@ -1,5 +1,6 @@
 """Standalone stdlib/fake-only active worker tests. Never invoke through pytest/conftest."""
-import offline_guard as test_offline  # noqa: F401  socket/process guards installed BEFORE application imports
+import offline_guard as test_offline
+import host_defaults  # noqa: F401  socket/process guards installed BEFORE application imports
 import copy
 import hashlib
 import io
@@ -156,7 +157,7 @@ class TypedWire(unittest.TestCase):
         def http(request,**kw):
             body=json.loads(request.data); j.verify_body(body); observed.append(body)
             return io.StringIO(json.dumps({'answers':{k:{'noul':.9} for k in body['questions']},'model':'fake-actual','usage':{'input_tokens':10,'output_tokens':1,'cost':.01}}))
-        with patch.object(dd,'urlopen',http):
+        with patch.object(host_defaults,'_installed_judgement_http',http):
             result=j.make_actor_judge(CFG)(packet)
         self.assertEqual(result['jev_model_actual'],'fake-actual')
         self.assertNotIn('workerContract',packet['state'])  # DB packet equality/cache ownership is unchanged.

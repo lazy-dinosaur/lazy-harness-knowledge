@@ -3,7 +3,8 @@ import json
 import math
 from pathlib import Path
 from urllib.error import HTTPError
-from urllib.request import Request, urlopen
+from urllib.request import Request
+import host_defaults
 
 from collect import JudgePageFailure
 
@@ -22,7 +23,8 @@ def safe_error(error, key):
 
 
 def make_jev_judge(topic_title, queries, *, base_url, api_key, model="~typesafe/jev-latest",
-                   question="relaxed", threshold=0.5, raw_dir=None, http=urlopen):
+                   question="relaxed", threshold=0.5, raw_dir=None, http=None):
+    http = http or host_defaults.lazy_judgement_http
     """Return a collect-compatible judge with a .judgments list of successful scores.
 
     raw_dir, when supplied, receives redacted response bytes, including failed HTTP bodies.

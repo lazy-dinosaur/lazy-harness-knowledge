@@ -49,7 +49,7 @@ class PortContracts(unittest.TestCase):
     def test_core_reaches_hosts_only_through_factories(self):
         import host_defaults
         self.assertEqual(sorted(n for n, _ in inspect.getmembers(host_defaults, inspect.isfunction) if not n.startswith('_')),
-                         ['worker_factory', 'writer_factory'])
+                         ['install_judgement_http', 'judgement_http', 'lazy_judgement_http', 'worker_factory', 'writer_factory'])
 
 
 if __name__ == '__main__':

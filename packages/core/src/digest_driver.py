@@ -4,7 +4,8 @@ import copy
 import json
 import os
 from pathlib import Path
-from urllib.request import Request, urlopen
+from urllib.request import Request
+import host_defaults
 
 import runner
 import store_pg
@@ -375,7 +376,7 @@ def _jev_judge(packet, *, cfg=None, request_projector=None):
     request = Request(base.rstrip("/") + "/v1/systemone",
                       data=json.dumps(request_body, ensure_ascii=False).encode(),
                       headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"}, method="POST")
-    with urlopen(request, timeout=60) as response:
+    with host_defaults.judgement_http()(request, timeout=60) as response:
         body = json.load(response)
     answers = body["answers"]
     if not isinstance(answers, dict) or set(answers) != set(packet["questions"]):

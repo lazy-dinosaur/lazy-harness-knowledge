@@ -1,6 +1,7 @@
 """Active typed Jev projections; preserve HTTP/model/questions/templates, no Luna substitution."""
 import json
-from urllib.request import Request, urlopen
+from urllib.request import Request
+import host_defaults
 from active_worker import project, UNIT, IDENTITY, WorkerFailure
 from writer_worker import digest
 
@@ -91,7 +92,7 @@ def partition_body(body, max_questions=3):
 
 
 def wire(role, http=None, *, template=None):
-    send=http or urlopen
+    send=http or host_defaults.lazy_judgement_http
     def bound(request,*args,**kwargs):
         body=bind_body(role,json.loads(request.data),template=template)
         # Authorization stays in the HTTP host headers, never model state.
