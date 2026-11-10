@@ -71,6 +71,7 @@ class Ports:
     domain_catalog: Callable[[], list[dict]] | None = None
     batch_questions: int = 0
     area_naming_context: bool = True  # Task363-N, default on (#20): catalog_names + one same-language re-ask, then hold
+    shared_component_check: bool = False  # S003 review A: on in production(); hand-built ports opt in
 
 
 def model_view(value):
@@ -142,7 +143,8 @@ def production(paid, cfg, *, catalog=None, writer_factory=None, worker_factory=N
     writer = (writer_factory or host_defaults.writer_factory())(paid)
     worker = (worker_factory or host_defaults.worker_factory())(paid)
     # Task366 (A2): batch same-state comparison questions (live: -39% Jev HTTP in the 10-parent run).
-    return Ports(model, embed.encode_queries, choose, ask, catalog, writer, worker, make_ask(cfg,'grounding'), batch_questions=3)
+    return Ports(model, embed.encode_queries, choose, ask, catalog, writer, worker, make_ask(cfg,'grounding'), batch_questions=3,
+                 shared_component_check=True)
 
 
 def role_call(ports, role, name, packet, task):
@@ -478,6 +480,16 @@ DOMAIN_UMBRELLA_QUESTION = DOMAIN_CRITERION + (
     '예/아니오 확률로 답한다.')
 
 
+# S003 review (user "추천대로 진행해줘", option A): a new domain must not be named after a business that merely USES the
+# unit's shared feature/component; the name is re-asked once in the shared component's own context.
+DOMAIN_SHARED_COMPONENT_QUESTION = DOMAIN_CRITERION + (
+    'unit의 소유 대상은 proposed(새 도메인 후보) 업무의 대상·규칙의 일부가 아니라, proposed 같은 여러 업무 화면이 가져다 쓰는 '
+    '공용 기능·컴포넌트(입력·검색·표시·알림 같은 공용 UI나 공용 라이브러리)인가? 그렇다면 예. '
+    'unit의 대상이 proposed 업무 자체의 대상·규칙이거나, proposed가 그 공용 기능 묶음 자체의 맥락이면 아니오. '
+    '예: proposed 물류, unit "공통 Button은 클릭 시 물결 효과를 낸다" → 예; proposed 디자인시스템, 같은 unit → 아니오; '
+    'proposed 물류, unit "배송함은 4도를 유지한다" → 아니오. 예/아니오 확률로 답한다.')
+
+
 DOMAIN_COVERED_QUESTION = DOMAIN_CRITERION + (
     'candidate의 이름·설명이 다루는 범위 안에 proposed의 주제가 이미 포함되는가? '
     '같은 이름뿐 아니라 하위 주제도 예. proposed가 동작·기능 이름이면 unit의 소유 엔티티가 속한 기존 맥락이 그 주제를 이미 포함하는지로 판단한다. 단순히 관련된 별도 맥락이면 아니오. '
@@ -753,6 +765,28 @@ def _place_identity_legacy(kind, unit, domain, catalog, ports, k, document=None)
             if not isinstance(description,str) or not description.strip() or len(description)>300 or not 1<=len(description.splitlines())<=2:
                 raise PlacementHeld('1-2 line description required',trace)
             proposed = {'name':name,'description':description.strip(),'aliases':[],'source_concept':concept}
+            if kind=='domain' and getattr(ports,'shared_component_check',False):
+                shared=score(ports,{'proposed':proposed,'unit':working},DOMAIN_SHARED_COMPONENT_QUESTION)
+                trace['shared_component_check']={'name':name,'score':shared}
+                if shared>=.7:
+                    # Re-ask naming once with feedback, then check the new name the same way.
+                    try:
+                        named = role_call(ports, kind+'-name', kind+'-shared-'+digest([working,domain,candidates,name])[:24],
+                            {'source':document or unit.get('source_text',unit['content']),'unit':working,'domain':domain,'existing':None,
+                             'catalog_names':[row['name'] for row in catalog],
+                             'shared_component_feedback':'E_DOMAIN_SHARED_COMPONENT: "'+str(name)+'" names a business that only uses this shared feature/component'},task)
+                    except ValueError as exc: raise PlacementHeld(str(exc),trace) from exc
+                    name = named.get('name'); description = named.get('description'); concept = named.get('source_concept')
+                    if short_name_errors(name,area=True) or not isinstance(description,str) or not description.strip() or len(description)>300 \
+                            or not 1<=len(description.splitlines())<=2 or not grounded_in(concept, document or unit.get('source_text',unit['content'])):
+                        raise PlacementHeld('E_DOMAIN_SHARED_COMPONENT: re-asked name is not admissible',trace)
+                    if area_language_error(name, catalog):
+                        raise PlacementHeld(area_language_error(name, catalog),trace)
+                    proposed = {'name':name,'description':description.strip(),'aliases':[],'source_concept':concept}
+                    again=score(ports,{'proposed':proposed,'unit':working},DOMAIN_SHARED_COMPONENT_QUESTION)
+                    trace['shared_component_check'].update(second=name,second_score=again)
+                    if again>=.7:
+                        raise PlacementHeld('E_DOMAIN_SHARED_COMPONENT: the domain name still names a consuming business',trace)
             if kind=='domain':
                 valid=score(ports,{'candidate':proposed,'unit':working},DOMAIN_QUESTION)
                 trace['domain_criterion']={'score':valid,'pass':valid>=.5}
