@@ -28,7 +28,7 @@ def make_jev_judge(topic_title, queries, *, base_url, api_key, model="~typesafe/
     """Return a collect-compatible judge with a .judgments list of successful scores.
 
     raw_dir, when supplied, receives redacted response bytes, including failed HTTP bodies.
-    Failure details are not logged; all failed pages raise JudgePageFailure after two attempts.
+    Failure details are not logged; all failed pages raise JudgePageFailure after one attempt (never re-sent).
     """
     if not isinstance(model, str) or not model.strip():
         raise ValueError("model is required")
@@ -47,7 +47,7 @@ def make_jev_judge(topic_title, queries, *, base_url, api_key, model="~typesafe/
                   "questions": {str(i): {"type": "noul", "instructions": QUESTIONS[question].format(i=i),
                                          "criteria": CRITERIA[question]} for i in range(len(candidates))},
                   "model": model}
-        for attempt in (1, 2):
+        for attempt in (1,):  # never re-send (#24)
             try:
                 request = Request(base_url.rstrip("/") + "/v1/systemone",
                                   data=json.dumps(packet, ensure_ascii=False).encode("utf-8"),
@@ -79,7 +79,7 @@ def make_jev_judge(topic_title, queries, *, base_url, api_key, model="~typesafe/
                     path.write_bytes(error.read().replace(api_key.encode(), b"[REDACTED]"))
                 # Do not expose exception text: HTTP errors can contain credentials.
                 _ = safe_error(error, api_key)
-        raise JudgePageFailure("Jev page failed after two attempts")
+        raise JudgePageFailure("Jev page failed (one attempt, not re-sent)")
 
     judge.judgments = judgments
     return judge

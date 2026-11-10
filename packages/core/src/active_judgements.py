@@ -105,7 +105,7 @@ def make_choice(cfg,*,http=None):
     import capture_audit
     return capture_audit.make_judge(cfg,http=wire('selection',http),text_limit=None)
 
-def make_state_choice(cfg,*,http=None,max_attempts=2):
+def make_state_choice(cfg,*,http=None,max_attempts=1):
     """One Choice about named state fields; no synthetic text item or batch indirection."""
     import math
     import capture_audit
