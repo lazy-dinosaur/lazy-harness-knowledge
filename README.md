@@ -15,6 +15,9 @@ repository so each part is built, tested and released separately, and driven by 
 
 ## Boundaries
 
+- **Ports**: every external capability (model call, embedding, typed Choice/Noul judgement, writer, worker) reaches the
+  core through the contracts in `packages/core/src/ports.py`; hosts and the composition layer implement them.
+
 - **No pi-fabric dependency anywhere in this repository.** The module owns its port contracts (model call, judgement,
   worker/run) and conformance tests with fakes; the pi-fabric implementation and version pinning live in lazy-harness,
   the composition layer.
