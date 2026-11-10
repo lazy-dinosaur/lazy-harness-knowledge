@@ -589,7 +589,8 @@ def main():
             result=run(args.phase,plan,HERE,paid,production(paid,cfg))
         elif args.phase=='area-catalog':
             from area_catalog import draft
-            result=draft(plan,HERE,paid)
+            # Use all 55 pilot documents even for the ten-document screen.
+            result=draft(plan,HERE,paid,inputs('pilot-area')[0])
         elif args.phase=='generate': result=generate(plan,paid)
         elif args.phase=='rewrite': result=rewrite(plan,paid)
         elif args.phase=='subject-fix':

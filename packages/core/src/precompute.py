@@ -60,7 +60,7 @@ def inventory(plan, home):
         if digest(value) != row['sha']:
             raise Stop('paid result drift')
         if 'text' in value:
-            from pipeline import parse_model
+            from generation import parse_model
             from model_output import ModelOutputInvalid
             try:
                 description = parse_model(value['text']).get('description')

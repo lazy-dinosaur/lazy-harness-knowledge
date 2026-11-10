@@ -1,6 +1,9 @@
 """Run scopes and their homes (core configuration). Experiment preparation lives in prepare.py."""
 from safety import HERE
 
+# Default host id for local runs (neutral; a host passes its own id in the run plan).
+LOCAL_HOST = 'knowledge-local'
+
 SCOPES = ('full', 'pilot', 'pilot-fresh', 'pilot-feature', 'pilot-area-10', 'pilot-area',
           'pilot-area-10-isolated', 'pilot-area-10-unit1-current')
 AREA_SCOPES = ('pilot-area-10', 'pilot-area', 'pilot-area-10-isolated', 'pilot-area-10-unit1-current')
