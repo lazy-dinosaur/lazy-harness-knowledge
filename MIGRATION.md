@@ -65,5 +65,8 @@ Order (each step keeps its own tests green before the next):
 5. **done (issue #6 step 5)** — run state defaults to the ignored `<repo>/.state` (`LH_KNOWLEDGE_STATE_HOME` overrides);
    experiment inputs are read only from `LH_KNOWLEDGE_INPUTS` (unset → explicit error); the code directory is used only for
    source hashing.
+   Corpus invariants of one host's inputs (expected counts, excluded questions, pilot subsets) live in the inputs folder's
+   `manifest.json`, not in code; neutral synthetic inputs in `packages/eval/tests/fixtures/inputs` drive the two formerly
+   skipped tests through `prepare` end to end.
 6. Port contracts + fake conformance tests (issue #1 P4); the pi-fabric implementation is lazy-harness work.
 7. lazy-harness keeps a thin consumer only.

@@ -1,0 +1,30 @@
+[
+ {
+  "record_id": "S1",
+  "path": "docs/order.md",
+  "sha256": "b702ae2d8a6b252dbdf538ce594356e5af0b1762c61cc05122189d41d7260446",
+  "pilot": true,
+  "bytes": 112
+ },
+ {
+  "record_id": "S2",
+  "path": "docs/delivery.md",
+  "sha256": "2ecda0485e9603359df33278ddc91c0403ec67bef73ead54ac451e2612a617f0",
+  "pilot": true,
+  "bytes": 57
+ },
+ {
+  "record_id": "S3",
+  "path": "docs/stock.md",
+  "sha256": "4e900d156affdecbc6aba3691cfbe113f60a7937a4eeeef3761187d3704f6931",
+  "pilot": false,
+  "bytes": 46
+ },
+ {
+  "record_id": "S4",
+  "path": "docs/missing.md",
+  "sha256": "a98a15492c917f46bd95591eb9ee062c8b4ee020a1b0f3e5933c24eb58aad059",
+  "pilot": false,
+  "bytes": 9
+ }
+]

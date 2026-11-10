@@ -125,11 +125,13 @@ class Offline(unittest.TestCase):
             rejected=p.checked_facts(record,answer)
             self.assertEqual(rejected['facts'],[])
             self.assertEqual(len(rejected['rejected']),1)
-    @unittest.skip('needs experiment inputs (restore report, baselines) not shipped here; moves to packages/eval with a synthetic fixture')
     def test_corrected_baselines_and_exact_inputs(self):
-        records,qs=prepare.inputs();base=prepare.baseline(qs)
-        self.assertEqual(len(records),598);self.assertEqual(len(qs),64)
-        self.assertFalse(prepare.EXCLUDED & {q['qid'] for q in qs})
+        # synthetic neutral inputs; the host corpus manifest lives with the host's inputs outside this repository
+        with synthetic_inputs():
+            m=prepare.manifest();records,qs=prepare.inputs();base=prepare.baseline(qs)
+        self.assertEqual(len(records),m['expected']['records']);self.assertEqual(len(qs),m['expected']['questions'])
+        self.assertFalse(set(m['excluded_questions']) & {q['qid'] for q in qs})
+        self.assertEqual({q['qid']:q['nuggets'] for q in qs},{'Q1':['S1:c1'],'Q2':['S2:c1']})  # nugget superseded by the last verdict file is dropped
         for arm in base.values():self.assertEqual(len(arm['runs']),3)
     def test_four_configs_single_writer_and_chunk_bound(self):
         self.assertEqual(len(p.ARMS),4)
@@ -141,6 +143,19 @@ class Offline(unittest.TestCase):
         self.assertEqual([x[:4] for x in MIGRATIONS],[f'{i:04}' for i in range(1,24)])
         self.assertEqual(MIGRATIONS[-1], '0023_validation_receipt')
         for name in MIGRATIONS:self.assertTrue((safety.RUNNER/'migrations'/(name+'.sql')).is_file())
+
+from contextlib import contextmanager
+
+
+@contextmanager
+def synthetic_inputs():
+    """Point experiment inputs and the source-document root at the neutral fixture in packages/eval/tests/fixtures."""
+    from unittest.mock import patch as _patch
+    import safety as _safety, prepare as _prepare
+    root = Path(__file__).resolve().parents[2] / 'eval/tests/fixtures/inputs'
+    with _patch.object(_safety, 'INPUTS_HOME', root), _patch.object(_prepare, 'STATE_HOME', root):
+        yield root
+
 
 def loadlines(path):return [json.loads(x) for x in path.read_text().splitlines()]
 if __name__=='__main__':unittest.main()

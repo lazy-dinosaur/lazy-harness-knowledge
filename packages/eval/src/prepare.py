@@ -7,7 +7,10 @@ from safety import HERE, RUNNER, STATE_HOME, inputs_home, digest, load, save
 import sys
 sys.path.insert(0, str(RUNNER))
 
-EXCLUDED = {'R10','R15','R32','R49','R55','X-R32-R33'}
+def manifest():
+    """Corpus invariants of the experiment inputs (expected counts, excluded questions, pilot subsets).
+    They describe one host's corpus, so they live with the inputs (LH_KNOWLEDGE_INPUTS/manifest.json), not in code."""
+    return load(inputs_home()/'manifest.json')
 CAPS = {'generation':12., 'absorption':150., 'maintenance':100., 'quality':50.,
         'reading':40., 'judging':5., 'embedding':1.}
 
@@ -20,8 +23,9 @@ from scopes import (SCOPES, AREA_SCOPES, TEN_SCOPES, PRIOR_REQUIRED_SCOPES, FRES
 
 def inputs(scope='full'):
     if scope not in SCOPES: raise ValueError('invalid scope')
+    m = manifest(); excluded = set(m['excluded_questions']); expected = m['expected']
     report = load(inputs_home()/'restore-report.json')
-    assert set(report['excluded_questions']) == EXCLUDED
+    assert set(report['excluded_questions']) == excluded
     records = []
     for r in load(inputs_home()/'scale-01/records.json'):
         if r['record_id'] in report['missing']: continue
@@ -32,25 +36,23 @@ def inputs(scope='full'):
         text = raw.decode()
         title = next((s.lstrip('# ').strip() for s in text.splitlines() if s.startswith('# ')), Path(r['path']).stem)
         records.append({**r,'chars':len(text),'lines':len(text.splitlines()),'title':title})
-    qs = [q for q in load(inputs_home()/'read-01/questions.json') if q['qid'] not in EXCLUDED]
-    assert len(records)==598 and len(qs)==64
+    qs = [q for q in load(inputs_home()/'read-01/questions.json') if q['qid'] not in excluded]
+    assert len(records)==expected['records'] and len(qs)==expected['questions']
     flat = {c['rid']+':'+c['id']:c['claim'] for c in load(inputs_home()/'capture-01/s1b-claims-flat.json')}
     verdict = {x['id']:x['verdict'] for n in (1,2,3) for x in load(inputs_home()/f'scale-03/measure/sol-result-{n}.json')['items']}
     for q in qs:
         q['nuggets'] = [n for n in q['nuggets'] if verdict[n] != 'superseded']
         q['claims'] = [flat[n] for n in q['nuggets']]
         raw = (inputs_home()/'read-01/b3-queries'/f"{q['qid']}.raw.txt").read_text()
-        import sys
-        sys.path.insert(0,str(RUNNER/'fragmenter'))
         from check_fragments import parse
         q['queries'] = parse(raw)['queries'][:6]
     if scope in SCOPES[1:]:
         records = [r for r in records if r['pilot']]
-        assert len(records) == 55
+        assert len(records) == expected['pilot_records']
         if scope in TEN_SCOPES:
-            from area_catalog import PILOT_TEN
-            records = [r for r in records if r['record_id'] in PILOT_TEN]
-            assert len(records) == 10
+            ten = set(m['pilot_ten'])
+            records = [r for r in records if r['record_id'] in ten]
+            assert len(records) == expected['ten_records']
     elif scope != 'full': raise ValueError('invalid scope')
     return records,qs
 
@@ -107,10 +109,11 @@ def prepare(scope='full'):
         except (TypeError, ValueError): raise ValueError('invalid prior pilot cash') from None
         if not math.isfinite(prior) or not 0 <= prior < .5: raise ValueError('invalid prior pilot cash')
     records,qs=inputs(scope)
-    source_files = list(HERE.glob('*.py')) + list(HERE.glob('*.mjs')) + list(RUNNER.glob('*.py')) + list((RUNNER/'migrations').glob('*.sql'))
-    source_files += [RUNNER/'pi-extension/knowledge.ts',RUNNER/'fragmenter/prompt-v3.md',RUNNER/'fragmenter/check_fragments.py',
-                     RUNNER/'subject-criteria-01/compare2.py',RUNNER/'subject-criteria-01/results2.json']
-    hashes={str(p.relative_to(RUNNER)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(source_files)}
+    import os
+    repo = RUNNER.parent.parent
+    source_files = (list(HERE.glob('*.py')) + list((RUNNER/'migrations').glob('*.sql'))
+                    + list((repo/'packages/eval/src').glob('*.py')) + list((repo/'hosts/pi/src').glob('*.py')) + list((repo/'hosts/pi/src').glob('*.mjs')))
+    hashes={os.path.relpath(p, RUNNER):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(source_files)}
     plan={'version':1,'records':records,'questions':qs,'caps':caps,'code':hashes,
           'baseline':baseline(qs),'estimate':estimate(records,qs,default_runs(scope)),
           'one_run_variant':estimate(records,qs,1),'paid_approved':False}

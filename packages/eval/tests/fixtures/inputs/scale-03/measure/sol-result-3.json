@@ -1,0 +1,20 @@
+{
+ "items": [
+  {
+   "id": "S1:c1",
+   "verdict": "kept"
+  },
+  {
+   "id": "S2:c1",
+   "verdict": "kept"
+  },
+  {
+   "id": "S2:c2",
+   "verdict": "superseded"
+  },
+  {
+   "id": "S3:c1",
+   "verdict": "kept"
+  }
+ ]
+}
