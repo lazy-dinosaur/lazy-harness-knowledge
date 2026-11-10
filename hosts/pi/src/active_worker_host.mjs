@@ -16,7 +16,7 @@ export function validateRoleRequest(request, budget) {
   if (!keys(message,'role,content,timestamp') || message.role!=='user' || message.timestamp!==0 || typeof message.content!=='string') fail('E_WORKER_INPUT');
   let env;
   try {env=JSON.parse(message.content);} catch {fail('E_WORKER_INPUT');}
-  if (!keys(env,'schemaVersion,promptVersion,role,sourceBinding,selectionBinding,data,inputBinding') || env.schemaVersion!==request.schemaVersion || env.promptVersion!=='active-worker-prompt/7' || env.role!==request.role) fail('E_WORKER_BINDING');
+  if (!keys(env,'schemaVersion,promptVersion,role,sourceBinding,selectionBinding,data,inputBinding') || env.schemaVersion!==request.schemaVersion || env.promptVersion!=='active-worker-prompt/8' || env.role!==request.role) fail('E_WORKER_BINDING');
   if (![env.sourceBinding,env.selectionBinding,env.inputBinding,request.binding].every(v=>typeof v==='string' && /^[a-f0-9]{64}$/.test(v))) fail('E_WORKER_BINDING');
   const binding=digest([env.schemaVersion,env.promptVersion,'openai/gpt-6-luna:medium',env.role,ctx.systemPrompt]);
   const {inputBinding,...unsigned}=env;
