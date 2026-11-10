@@ -3,7 +3,7 @@ import hashlib
 import json
 import threading
 from uuid import uuid5, NAMESPACE_URL
-from safety import HERE, RUNNER, ROOT, Ledger, Paid, Stop, digest, exclusive, load, save
+from safety import STATE_HOME as HERE, RUNNER, ROOT, Ledger, Paid, Stop, digest, exclusive, load, save
 from scopes import LOCAL_HOST as HOST
 from model_output import ModelOutputInvalid
 from scopes import source_home

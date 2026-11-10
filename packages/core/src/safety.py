@@ -15,6 +15,17 @@ import urllib.error
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 RUNNER = HERE.parent
+# Run state never lives inside the source tree (issue #6 step 5): default <repo>/.state (gitignored).
+STATE_HOME = Path(os.environ.get('LH_KNOWLEDGE_STATE_HOME') or (ROOT / '.state')).resolve()
+# Experiment inputs come from outside the repository; unset means "no experiment inputs available".
+_INPUTS = os.environ.get('LH_KNOWLEDGE_INPUTS')
+INPUTS_HOME = Path(_INPUTS).resolve() if _INPUTS else None
+
+
+def inputs_home():
+    if INPUTS_HOME is None:
+        raise RuntimeError('experiment inputs are not part of this repository; set LH_KNOWLEDGE_INPUTS to their folder')
+    return INPUTS_HOME
 
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()
@@ -143,7 +154,8 @@ class Ledger:
 
 @contextlib.contextmanager
 def exclusive(home=None):
-    with ((home or HERE) / '.run.lock').open('a') as f:
+    (home or STATE_HOME).mkdir(parents=True, exist_ok=True)
+    with ((home or STATE_HOME) / '.run.lock').open('a') as f:
         try: fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError: raise Stop('another scale-04 process owns the ledger')
         yield

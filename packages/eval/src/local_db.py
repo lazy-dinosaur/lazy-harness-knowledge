@@ -4,7 +4,7 @@ import hashlib
 import os
 import subprocess
 import time
-from safety import HERE, RUNNER, Stop, save, load
+from safety import STATE_HOME as HERE, RUNNER, Stop, save, load
 
 IMAGE='public.ecr.aws/supabase/postgres:17.6.1.134'
 NAME='lh-knowledge-local-local'

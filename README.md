@@ -25,3 +25,6 @@ repository so each part is built, tested and released separately, and driven by 
 Language: Python for the core and evaluation; a small Node transport for the Pi host.
 
 Tests: `./run-tests.sh` (each package in its own process).
+
+Run state: `<repo>/.state` by default (gitignored; `LH_KNOWLEDGE_STATE_HOME` overrides). Experiment inputs are
+not part of this repository; point `LH_KNOWLEDGE_INPUTS` at them.
