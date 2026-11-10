@@ -64,6 +64,13 @@ class ActiveContracts(unittest.TestCase):
                 self.assertEqual(packet,before)
                 self.assertEqual(c.parse_output(json.dumps(reply(role),ensure_ascii=False),role),reply(role))
                 CAPTURES.append({'request':request,'reply':reply(role)})
+        # re-ask variants (#20 language, S003 review A shared component): same closed packet plus catalog names and feedback
+        packet=dict(evidence('domain-name'),catalog_names=['물류','인사'],language_feedback='E_AREA_LANGUAGE: previous name Logistics',
+                    shared_component_feedback='E_DOMAIN_SHARED_COMPONENT: "주문" names a business that only uses this shared component')
+        request=c.build_request('domain-name',packet,1000000)
+        env=json.loads(request['context']['messages'][0]['content'])
+        self.assertEqual(env['data']['shared_component_feedback'],packet['shared_component_feedback'])
+        CAPTURES.append({'request':request,'reply':reply('domain-name')})
         original={'fact':'배송함은 4도를 유지한다.','keywords':['온도'],'source_ranges':[[1,1]],'reason':'원문 보존'}
         packet={'source':RAW,'unit':evidence('subject-name')['unit'],
                 'chosen_domain':{'name':'물류','description':'물류 업무','aliases':[]},
