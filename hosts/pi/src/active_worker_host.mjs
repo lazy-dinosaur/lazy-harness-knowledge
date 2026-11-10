@@ -34,6 +34,14 @@ export function validateRoleRequest(request, budget) {
   if (optional.length) {
     const names=env.data.catalog_names;
     if (!Array.isArray(names) || names.length>200 || names.some(n=>typeof n!=='string' || !n.trim() || n.length>80)) fail('E_WORKER_INPUT');
+    // #20 / S003 review A: one controller re-ask may carry feedback, only together with catalog_names (same rule as the core).
+    for (const key of ['language_feedback','shared_component_feedback']) {
+      if (key in env.data) {
+        const v=env.data[key];
+        if (typeof v!=='string' || !v.trim() || v.length>600) fail('E_WORKER_INPUT');
+        optional.push(key);
+      }
+    }
   }
   if (!env.data || Object.keys(env.data).some(k=>!allowed.includes(k) && !optional.includes(k))) fail('E_WORKER_INPUT');
   if (['domain-name','subject-name'].includes(request.role)) {
