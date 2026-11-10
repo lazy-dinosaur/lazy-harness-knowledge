@@ -138,10 +138,9 @@ def production(paid, cfg, *, catalog=None, writer_factory=None, worker_factory=N
     base_ask = make_ask(cfg,'placement')
     def ask(state, labels, question):
         return base_ask(model_view(state), labels, question)
-    from writer_transport import make_writer
-    writer = (writer_factory or make_writer)(paid)
-    from active_worker_transport import make_worker
-    worker = (worker_factory or make_worker)(paid)
+    import host_defaults
+    writer = (writer_factory or host_defaults.writer_factory())(paid)
+    worker = (worker_factory or host_defaults.worker_factory())(paid)
     # Task366 (A2): batch same-state comparison questions (live: -39% Jev HTTP in the 10-parent run).
     return Ports(model, embed.encode_queries, choose, ask, catalog, writer, worker, make_ask(cfg,'grounding'), batch_questions=3)
 

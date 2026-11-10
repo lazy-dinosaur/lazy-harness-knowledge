@@ -23,3 +23,5 @@ repository so each part is built, tested and released separately, and driven by 
 - Experiment result data (run outputs, raw model responses, database dumps, `.local/`) is never committed.
 
 Language: Python for the core and evaluation; a small Node transport for the Pi host.
+
+Tests: `./run-tests.sh` (each package in its own process).

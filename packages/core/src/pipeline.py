@@ -413,10 +413,10 @@ def import_state(plan, archives, *, empty_db=False, continue_checkpoint=False):
 
 def adapters(cfg,paid, *, generator=None, worker_factory=None):
     import digest_driver as dd, domain_router as dr, worker_tools as wt, embed
-    from active_worker_transport import make_worker
+    import host_defaults
     from active_worker import PROMPTS, WorkerFailure
     from active_judgements import make_ask
-    worker = (worker_factory or make_worker)(paid)
+    worker = (worker_factory or host_defaults.worker_factory())(paid)
     def generate(role,snapshot):
         try:
             return generator(snapshot,PROMPTS[role]) if generator is not None else worker(role,snapshot)
