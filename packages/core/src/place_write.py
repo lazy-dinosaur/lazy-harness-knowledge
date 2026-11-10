@@ -482,12 +482,17 @@ DOMAIN_UMBRELLA_QUESTION = DOMAIN_CRITERION + (
 
 # S003 review (user "추천대로 진행해줘", option A): a new domain must not be named after a business that merely USES the
 # unit's shared feature/component; the name is re-asked once in the shared component's own context.
+# Calibrated 2026-11-07 on 34 recorded (unit, proposal) pairs x 2 repeats (agent labels): this two-facts wording separates
+# shared-component units under a consuming business (min .35) from the rest (max .19); 68/68 at .3, 0 flips. The first
+# wording overlapped (yes .21-.69, no .04-.60).
+SHARED_COMPONENT_THRESHOLD = .3
 DOMAIN_SHARED_COMPONENT_QUESTION = DOMAIN_CRITERION + (
-    'unit의 소유 대상은 proposed(새 도메인 후보) 업무의 대상·규칙의 일부가 아니라, proposed 같은 여러 업무 화면이 가져다 쓰는 '
-    '공용 기능·컴포넌트(입력·검색·표시·알림 같은 공용 UI나 공용 라이브러리)인가? 그렇다면 예. '
-    'unit의 대상이 proposed 업무 자체의 대상·규칙이거나, proposed가 그 공용 기능 묶음 자체의 맥락이면 아니오. '
-    '예: proposed 물류, unit "공통 Button은 클릭 시 물결 효과를 낸다" → 예; proposed 디자인시스템, 같은 unit → 아니오; '
-    'proposed 물류, unit "배송함은 4도를 유지한다" → 아니오. 예/아니오 확률로 답한다.')
+    'unit의 소유 대상(target)은 특정 업무 하나에 속하지 않고 여러 업무 화면이 그대로 가져다 쓰는 공용 UI·기술 부품'
+    '(입력 필드, 자동완성, debounce 훅, 버튼, 모달 틀, 공용 라이브러리)인가? 그리고 proposed는 그런 공용 부품 묶음 자체가 아니라 '
+    '그 부품을 쓰는 업무 영역인가? 두 가지가 모두 맞으면 예. unit 대상이 그 업무 자신의 화면·규칙·데이터(예: 특정 업무 화면의 검색 범위 규칙)이거나 '
+    'proposed가 공용 부품 묶음(디자인시스템·프론트엔드 같은) 자체면 아니오. '
+    '예: proposed 물류, unit "공통 자동완성은 300ms debounce 후 요청한다" → 예; proposed 디자인시스템, 같은 unit → 아니오; '
+    'proposed 물류, unit "배송 조회 화면의 검색은 선택한 창고 안에서만 찾는다" → 아니오. 예/아니오 확률로 답한다.')
 
 
 DOMAIN_COVERED_QUESTION = DOMAIN_CRITERION + (
@@ -768,7 +773,7 @@ def _place_identity_legacy(kind, unit, domain, catalog, ports, k, document=None)
             if kind=='domain' and getattr(ports,'shared_component_check',False):
                 shared=score(ports,{'proposed':proposed,'unit':working},DOMAIN_SHARED_COMPONENT_QUESTION)
                 trace['shared_component_check']={'name':name,'score':shared}
-                if shared>=.7:
+                if shared>=SHARED_COMPONENT_THRESHOLD:
                     # Re-ask naming once with feedback, then check the new name the same way.
                     try:
                         named = role_call(ports, kind+'-name', kind+'-shared-'+digest([working,domain,candidates,name])[:24],
@@ -785,7 +790,7 @@ def _place_identity_legacy(kind, unit, domain, catalog, ports, k, document=None)
                     proposed = {'name':name,'description':description.strip(),'aliases':[],'source_concept':concept}
                     again=score(ports,{'proposed':proposed,'unit':working},DOMAIN_SHARED_COMPONENT_QUESTION)
                     trace['shared_component_check'].update(second=name,second_score=again)
-                    if again>=.7:
+                    if again>=SHARED_COMPONENT_THRESHOLD:
                         raise PlacementHeld('E_DOMAIN_SHARED_COMPONENT: the domain name still names a consuming business',trace)
             if kind=='domain':
                 valid=score(ports,{'candidate':proposed,'unit':working},DOMAIN_QUESTION)
