@@ -44,7 +44,7 @@ def plan_dir():
 
 def make_ask(cfg, http=None):
     http = http or host_defaults.lazy_judgement_http
-    """ask(state, texts, question) -> list[float]; one Jev request per CHUNK texts, two attempts each."""
+    """ask(state, texts, question) -> list[float]; one Jev request per CHUNK texts, one attempt each: a failed send may still have reached Jev, so it is never re-sent."""
     def ask(state, texts, question):
         scores = []
         for k in range(0, len(texts), CHUNK):
@@ -54,7 +54,7 @@ def make_ask(cfg, http=None):
             body = {"model": cfg["jev_model"], "state": {**state, "items": [{"i": j, "text": t[:600]} for j, t in enumerate(chunk)]},
                     "questions": qs}
             data = None
-            for _ in (1, 2):
+            for _ in (1,):  # never re-send (#24)
                 try:
                     req = Request(cfg["jev_base_url"].rstrip("/") + "/v1/systemone", data=json.dumps(body, ensure_ascii=False).encode(),
                                   headers={"Authorization": "Bearer " + cfg["jev_api_key"], "Content-Type": "application/json"}, method="POST")
@@ -65,9 +65,8 @@ def make_ask(cfg, http=None):
                     break
                 except (OSError, ValueError, KeyError, TypeError):
                     data = None
-                    time.sleep(1)
             if data is None:
-                raise RuntimeError("Jev judgement failed after two attempts")
+                raise RuntimeError("Jev judgement failed (one attempt, not re-sent)")
             scores += [float(data["answers"][f"m{j}"]["noul"]) for j in range(len(chunk))]
         return scores
     return ask

@@ -90,5 +90,65 @@ class StageRun(unittest.TestCase):
             self.assertEqual(broker.accounting()['unknown_cost_calls'], 1)
 
 
+class Safety(unittest.TestCase):
+    """#24 external review: no Jev re-send, one cash cap per run name across restarts, nonzero exit on a stop."""
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name); (root / 'v1/docs').mkdir(parents=True); (root / 'v1/docs/order.md').write_text(DOC)
+        for m in (patch.object(sr, 'STATE_HOME', root), patch.object(safety, 'INPUTS_HOME', root)):
+            m.start(); self.addCleanup(m.stop)
+        self.root = root
+        self.reply = {'items': [{'content': '주문은 결제 전에 취소할 수 있다.', 'target_expression': '주문', 'source_ranges': [[2, 2]]}]}
+
+    def test_lost_jev_reply_counts_the_reserve_and_stops_without_resend(self):
+        sends = []
+        def boom(req, timeout=60):
+            sends.append(1); raise TimeoutError('read timed out')
+        broker = sr.Broker(plan(), dry=False, judgement_http=boom)
+        with self.assertRaisesRegex(Stop, 'outcome unknown'): broker.judgement('request')
+        self.assertEqual(sends, [1]); self.assertAlmostEqual(broker.cash, 0.0347); self.assertEqual(broker.uncertain, 1)
+
+    def test_core_judgement_paths_send_once_through_the_broker(self):
+        import capture_audit as ca, worker_tools as wt
+        sends = []
+        def boom(req, timeout=60):
+            sends.append(1); raise OSError('connection reset')
+        # A cap with room for two reserves: after the first uncertain send the second path must still send once only.
+        broker = sr.Broker(plan(cash_cap_usd=0.2), dry=False, judgement_http=boom); broker.install(); self.addCleanup(sr.Broker.uninstall)
+        cfg = {'jev_base_url': 'http://jev.invalid', 'jev_api_key': 'k', 'jev_model': 'm'}
+        with self.assertRaises(Stop): ca.request_answers(cfg, {'questions': {'m0': {}}})
+        with self.assertRaises(Stop): wt.make_ask(cfg)({}, ['a'], 'q {i}')
+        self.assertEqual(sends, [1, 1])
+
+    def test_existing_accounting_refuses_a_paid_rerun_without_resume(self):
+        out = self.root / 'out'; out.mkdir()
+        before = {'outcome': 'completed', 'accounting': {'used': {'sdk': 3, 'jev_http': 0, 'embedding_post': 0, 'embedding_inputs': 0}, 'cash_usd': 0.03}}
+        (out / 'accounting.json').write_text(json.dumps(before))
+        calls = []
+        broker = sr.Broker(plan(), dry=False, worker_factory=lambda paid: (lambda role, packet: calls.append(role) or self.reply))
+        result = sr.run(plan(), dry=False, ports_factory=fake_ports, broker=broker, out_dir=out)
+        self.assertIn('already has accounting', result['outcome']); self.assertEqual(calls, [])
+        self.assertEqual(json.loads((out / 'accounting.json').read_text()), before)
+
+    def test_resume_continues_cash_and_counts_an_in_flight_reserve(self):
+        out = self.root / 'out'; out.mkdir()
+        live = {'used': {'sdk': 1, 'jev_http': 2, 'embedding_post': 0, 'embedding_inputs': 0}, 'cash_usd': 0.01,
+                'unknown_cost_calls': 0, 'uncertain_calls': 0, 'pending_reserve_usd': 0.0347}
+        (out / 'accounting-live.json').write_text(json.dumps(live))
+        broker = sr.Broker(plan(resume=True), dry=False, worker_factory=lambda paid: (lambda role, packet: self.reply))
+        result = sr.run(plan(resume=True), dry=False, ports_factory=fake_ports, broker=broker, out_dir=out)
+        self.assertEqual(result['outcome'], 'completed', result)
+        self.assertAlmostEqual(result['accounting']['cash_usd'], 0.0447); self.assertEqual(result['accounting']['used']['sdk'], 2)
+        self.assertEqual(json.loads((out / 'accounting-live.json').read_text())['used']['sdk'], 2)
+
+    def test_cli_exit_code_is_nonzero_on_a_stop(self):
+        for outcome, dry, code in (('completed', False, 0), ('DRYRUN: provider attempt refused (sdk)', True, 0),
+                                   ('run cash cap reached before effect', False, 2)):
+            with patch.object(sr, 'load', return_value={}), patch.object(sr, 'production_ports', return_value=None), \
+                    patch.object(sr, 'run', return_value={'outcome': outcome}), patch('builtins.print'):
+                with self.assertRaises(SystemExit) as exc: sr.main(['--plan', 'x'] + (['--dry-run'] if dry else []))
+            self.assertEqual(exc.exception.code, code, outcome)
+
+
 if __name__ == '__main__':
     unittest.main()

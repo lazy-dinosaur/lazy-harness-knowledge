@@ -49,7 +49,7 @@ CHUNK = 20
 MAX_UNITS = 400
 
 
-def request_answers(cfg, body, http=None, *, max_attempts=2):
+def request_answers(cfg, body, http=None, *, max_attempts=1):
     http = http or host_defaults.lazy_judgement_http
     """One accounted HTTP request path shared by text batches and whole-state questions."""
     if max_attempts not in (1, 2): raise ValueError('max_attempts must be 1 or 2')
@@ -68,7 +68,7 @@ def request_answers(cfg, body, http=None, *, max_attempts=2):
     return data['answers']
 
 
-def make_judge(cfg, http=None, *, max_attempts=2, text_limit=600):
+def make_judge(cfg, http=None, *, max_attempts=1, text_limit=600):
     http = http or host_defaults.lazy_judgement_http
     """judge(state, texts, question, criteria=None) -> list[answer dict]; noul when criteria is None, else choice."""
     if max_attempts not in (1, 2):

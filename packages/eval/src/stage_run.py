@@ -13,7 +13,11 @@ Plan (JSON, kept outside the repository, e.g. in the state home)::
      "base": "<path to snapshot>",                                         # place only
      "caps": {"sdk": 10, "jev_http": 100, "embedding_post": 10, "embedding_inputs": 100},
      "cash_cap_usd": 0.05, "absolute_ceiling_usd": 1.0, "prior_spent_usd": 0.93, "jev_reserve_usd": 0.0347,
-     "approval": "<user approval reference>"}
+     "approval": "<user approval reference>", "resume": false}
+
+A run name keeps one cash cap across restarts: accounting is persisted after every counted attempt
+(``accounting-live.json``); a paid run whose folder already has accounting is refused unless the plan says
+``"resume": true``, which continues the counters and cash (an in-flight Jev reserve counts as spent).
 
 The cash numbers are the user's decision (lazy-harness SSOT), never inferred here.
 """
@@ -63,6 +67,7 @@ class Broker:
                  embedding_http=None, embedding_remote=None):
         self.caps = dict(plan['caps']); self.used = {k: 0 for k in COUNTERS}; self.dry = dry
         self.cash_cap = float(plan['cash_cap_usd']); self.reserve = float(plan['jev_reserve_usd']); self.cash = 0.0; self.unknown_cost = 0
+        self.uncertain = 0; self.pending = 0.0; self.live = None
         self._writer = writer_factory; self._worker = worker_factory
         self._judgement = judgement_http; self._embed = embedding_http; self._remote = embedding_remote
 
@@ -74,16 +79,35 @@ class Broker:
         if self.cash + reserve > self.cash_cap + 1e-12:
             raise Stop('run cash cap reached before effect: $%.6f + reserve $%.6f > $%.6f' % (self.cash, reserve, self.cash_cap))
         self.used[kind] += n
+        self._persist()
 
     def charge(self, usd):
         if type(usd) in (int, float) and math.isfinite(usd) and usd > 0: self.cash += float(usd)
+        self._persist()
+
+    def _persist(self):
+        if self.live is not None: save(self.live, self.accounting())
+
+    def resume_from(self, prior):
+        """Continue a run's counters and cash; an in-flight Jev reserve from a crash counts as spent."""
+        self.used = {k: int((prior.get('used') or {}).get(k, 0)) for k in COUNTERS}
+        self.cash = float(prior.get('cash_usd', 0.0)) + float(prior.get('pending_reserve_usd', 0.0))
+        self.unknown_cost = int(prior.get('unknown_cost_calls', 0)); self.uncertain = int(prior.get('uncertain_calls', 0))
 
     # --- judgement transport (urlopen shape): count, then read cost from the JSON reply
     def judgement(self, request, timeout=60):
         self.admit('jev_http', reserve=self.reserve)
         send = self._judgement or host_defaults._factory('jev_http', 'send')
-        with send(request, timeout=timeout) as response:
-            raw = response.read()
+        # A sent request whose reply is lost may still be billed: count its reserve as spent and stop, never re-send (#24).
+        self.pending = self.reserve; self._persist()
+        try:
+            with send(request, timeout=timeout) as response:
+                raw = response.read()
+        except Exception as exc:
+            self.pending = 0.0; self.cash += self.reserve; self.uncertain += 1; self._persist()
+            raise Stop('Jev request outcome unknown (%s); its reserve $%.6f is counted as spent; stopping without re-send '
+                       '(uncertain calls: %d)' % (type(exc).__name__, self.reserve, self.uncertain))
+        self.pending = 0.0
         # The provider reports the cost in usage.cost (digest_driver reads the same field). A reply without a known cost
         # stops the run: spending must never continue blind (the first paid run charged 0 because of this, #24).
         try:
@@ -92,7 +116,7 @@ class Broker:
             usage = None
         cost = usage.get('cost') if isinstance(usage, dict) else None
         if type(cost) not in (int, float) or not math.isfinite(cost) or cost < 0:
-            self.unknown_cost += 1
+            self.unknown_cost += 1; self.cash += self.reserve; self._persist()
             raise Stop('Jev reply without a known usage.cost; stopping before more spend (unknown-cost calls: %d)' % self.unknown_cost)
         self.charge(cost)
         return io.BytesIO(raw)
@@ -133,7 +157,7 @@ class Broker:
 
     def accounting(self):
         return {'used': dict(self.used), 'caps': dict(self.caps), 'cash_usd': round(self.cash, 9), 'cash_cap_usd': self.cash_cap,
-                'unknown_cost_calls': self.unknown_cost}
+                'unknown_cost_calls': self.unknown_cost, 'uncertain_calls': self.uncertain, 'pending_reserve_usd': self.pending}
 
 
 def load_records(plan):
@@ -155,6 +179,18 @@ def run(plan, *, dry, ports_factory, out_dir=None, broker=None):
     broker = broker or Broker(plan, dry=dry)
     out = Path(out_dir or (STATE_HOME / 'runs' / plan['run']))
     out.mkdir(parents=True, exist_ok=True)
+    if not dry:
+        live, final = out / 'accounting-live.json', out / 'accounting.json'
+        prior = load(live) if live.exists() else (load(final).get('accounting') if final.exists() else None)
+        if prior is not None:
+            if plan.get('resume') is not True:
+                result = {'outcome': 'run %s already has accounting; use a new run name or "resume": true (nothing sent)' % plan['run'],
+                          'stage': plan['stage'], 'dry_run': dry, 'accounting': prior, 'reports': {}}
+                save(out / 'accounting-refused.json', result)
+                return result
+            broker.resume_from(prior)
+        broker.live = live
+        broker._persist()
     broker.install()
     reports, outcome = {}, 'completed'
     try:
@@ -200,6 +236,8 @@ def main(argv=None):
     plan = load(Path(args.plan))
     result = run(plan, dry=args.dry_run, ports_factory=production_ports(plan))
     print(json.dumps(result, ensure_ascii=False))
+    ok = result['outcome'] == 'completed' or (args.dry_run and result['outcome'].startswith('DRYRUN'))
+    raise SystemExit(0 if ok else 2)
 
 
 if __name__ == '__main__':
