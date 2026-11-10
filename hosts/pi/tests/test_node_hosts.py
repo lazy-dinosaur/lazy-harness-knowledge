@@ -28,7 +28,7 @@ class NodeHosts(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             core = REPO / 'packages/core/tests/test_active_worker_offline.py'
             import os
-            env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(x) for x in (REPO / 'packages/core/src', core.parent, HERE.parent / 'src')))
+            env = dict(os.environ, PYTHONPATH=os.pathsep.join(str(x) for x in (REPO / 'packages/core/src', REPO / 'packages/eval/src', core.parent, HERE.parent / 'src')))
             made = subprocess.run([sys.executable, str(core), '--capture-root', tmp], capture_output=True, text=True, cwd=core.parent, env=env)
             self.assertEqual(made.returncode, 0, made.stderr[-2000:])
             out = subprocess.run(['node', str(HERE / 'test_active_worker_host_offline.mjs'), tmp, str(rt)], capture_output=True, text=True)

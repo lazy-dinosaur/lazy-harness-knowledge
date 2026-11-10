@@ -5,3 +5,4 @@ set -euo pipefail
 cd "$(dirname "$0")"
 python3 -m pytest -q -p no:cacheprovider packages/core/tests
 python3 -m pytest -q -p no:cacheprovider hosts/pi/tests
+python3 -m pytest -q -p no:cacheprovider packages/eval/tests
