@@ -306,8 +306,8 @@ class DomainContextWire(unittest.TestCase):
             meta=state['workerContract'];self.assertEqual(meta['schemaVersion'],'active-jev/1');self.assertEqual(meta['promptVersion'],'active-jev-criteria/1')
             self.assertNotIn('PRIVATE_HOST',json.dumps(body));self.assertNotIn('PRIVATE_UUID',json.dumps(body))
             j.verify_body(body)
-        # Task363-N is opt-in (Ports.area_naming_context); default packets stay the closed four keys.
-        self.assertEqual(set(packets[0]),{'source','unit','domain','existing'})
+        # Task363-N is on by default since #20 (Ports.area_naming_context): domain naming also gets catalog_names.
+        self.assertEqual(set(packets[0]),{'source','unit','domain','existing','catalog_names'})  # #20: catalog names by default
         self.assertEqual(packets[0]['source'],RAW);self.assertNotIn('naming_context',packets[0])
     def test_changed_source_or_target_cannot_reuse_the_old_typed_binding(self):
         _,bodies,_=self.run_context()
