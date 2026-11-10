@@ -71,12 +71,23 @@ class StageRun(unittest.TestCase):
         class Reply(io.BytesIO):
             def __enter__(self): return self
             def __exit__(self, *a): return False
-        broker = sr.Broker(plan(), dry=False, judgement_http=lambda req, timeout=60: Reply(json.dumps({'answers': {}, 'cost_usd': 0.0002}).encode()))
+        broker = sr.Broker(plan(), dry=False, judgement_http=lambda req, timeout=60: Reply(json.dumps({'answers': {}, 'usage': {'cost': 0.0002}}).encode()))
         body = broker.judgement('request')
-        self.assertEqual(json.loads(body.read())['cost_usd'], 0.0002)
+        self.assertEqual(json.loads(body.read())['usage']['cost'], 0.0002)
         self.assertEqual(broker.used['jev_http'], 1); self.assertAlmostEqual(broker.cash, 0.0002)
         broker.cash = 0.049
         with self.assertRaisesRegex(Stop, 'run cash cap'): broker.judgement('request')
+
+
+    def test_reply_without_known_cost_stops_the_run(self):
+        import io
+        class Reply(io.BytesIO):
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+        for body in ({'answers': {}}, {'answers': {}, 'cost_usd': 0.0002}, {'answers': {}, 'usage': {'cost': None}}):
+            broker = sr.Broker(plan(), dry=False, judgement_http=lambda req, timeout=60, b=body: Reply(json.dumps(b).encode()))
+            with self.assertRaisesRegex(Stop, 'without a known usage.cost'): broker.judgement('request')
+            self.assertEqual(broker.accounting()['unknown_cost_calls'], 1)
 
 
 if __name__ == '__main__':

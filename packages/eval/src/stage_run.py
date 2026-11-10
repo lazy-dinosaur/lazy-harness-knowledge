@@ -62,7 +62,7 @@ class Broker:
     def __init__(self, plan, *, dry, writer_factory=None, worker_factory=None, judgement_http=None,
                  embedding_http=None, embedding_remote=None):
         self.caps = dict(plan['caps']); self.used = {k: 0 for k in COUNTERS}; self.dry = dry
-        self.cash_cap = float(plan['cash_cap_usd']); self.reserve = float(plan['jev_reserve_usd']); self.cash = 0.0
+        self.cash_cap = float(plan['cash_cap_usd']); self.reserve = float(plan['jev_reserve_usd']); self.cash = 0.0; self.unknown_cost = 0
         self._writer = writer_factory; self._worker = worker_factory
         self._judgement = judgement_http; self._embed = embedding_http; self._remote = embedding_remote
 
@@ -84,10 +84,17 @@ class Broker:
         send = self._judgement or host_defaults._factory('jev_http', 'send')
         with send(request, timeout=timeout) as response:
             raw = response.read()
+        # The provider reports the cost in usage.cost (digest_driver reads the same field). A reply without a known cost
+        # stops the run: spending must never continue blind (the first paid run charged 0 because of this, #24).
         try:
-            self.charge(json.loads(raw).get('cost_usd'))
+            usage = json.loads(raw).get('usage')
         except ValueError:
-            pass
+            usage = None
+        cost = usage.get('cost') if isinstance(usage, dict) else None
+        if type(cost) not in (int, float) or not math.isfinite(cost) or cost < 0:
+            self.unknown_cost += 1
+            raise Stop('Jev reply without a known usage.cost; stopping before more spend (unknown-cost calls: %d)' % self.unknown_cost)
+        self.charge(cost)
         return io.BytesIO(raw)
 
     # --- embedding transports
@@ -125,7 +132,8 @@ class Broker:
         host_defaults.install_embedding_transport()
 
     def accounting(self):
-        return {'used': dict(self.used), 'caps': dict(self.caps), 'cash_usd': round(self.cash, 9), 'cash_cap_usd': self.cash_cap}
+        return {'used': dict(self.used), 'caps': dict(self.caps), 'cash_usd': round(self.cash, 9), 'cash_cap_usd': self.cash_cap,
+                'unknown_cost_calls': self.unknown_cost}
 
 
 def load_records(plan):
