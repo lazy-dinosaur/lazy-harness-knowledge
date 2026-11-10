@@ -87,7 +87,7 @@ function changedRequest(original,change) {
 }
 for (const capture of captures.filter(c=>['domain-name','subject-name'].includes(c.request.role))) {
   const env=JSON.parse(capture.request.context.messages[0].content);
-  assert.equal(env.promptVersion,'active-worker-prompt/7');
+  assert.equal(env.promptVersion,'active-worker-prompt/8');
   assert.equal(env.data.naming_context.final_admission,'pending');checks++;
   for (const change of [e=>delete e.data.naming_context,
       e=>e.data.naming_context.scope=e.role==='domain-name'?'subject':'domain',

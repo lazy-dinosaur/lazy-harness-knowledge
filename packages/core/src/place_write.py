@@ -70,7 +70,7 @@ class Ports:
     normal_fidelity_policy: object | None = None
     domain_catalog: Callable[[], list[dict]] | None = None
     batch_questions: int = 0
-    area_naming_context: bool = False  # Task363-N opt-in (not yet live-proven): catalog_names + catalog-language hold
+    area_naming_context: bool = True  # Task363-N, default on (#20): catalog_names + one same-language re-ask, then hold
 
 
 def model_view(value):
@@ -732,6 +732,17 @@ def _place_identity_legacy(kind, unit, domain, catalog, ports, k, document=None)
                     if not admit_name(domain,name,unit,document,ddd_pass):
                         raise PlacementHeld('E_SUBJECT_AREA: domain alone is not a subject noun phrase',trace)
             language_error = area_language_error(name, catalog) if kind=='domain' and getattr(ports,'area_naming_context',False) else None
+            if language_error:
+                # #20: re-ask naming once in the catalog language instead of holding immediately.
+                trace['language_retry']={'first':name,'error':language_error}
+                try:
+                    named = role_call(ports, kind+'-name', kind+'-lang-'+digest([working,domain,candidates,name])[:24],
+                        {'source':document or unit.get('source_text',unit['content']),'unit':working,'domain':domain,'existing':None,
+                         'catalog_names':[row['name'] for row in catalog],'language_feedback':language_error+' (previous name: '+str(name)+')'},task)
+                except ValueError as exc: raise PlacementHeld(str(exc),trace) from exc
+                name = named.get('name'); description = named.get('description'); concept = named.get('source_concept')
+                trace['language_retry']['second']=name
+                language_error = area_language_error(name, catalog)
             if language_error:
                 raise PlacementHeld(language_error,trace)
             import runner

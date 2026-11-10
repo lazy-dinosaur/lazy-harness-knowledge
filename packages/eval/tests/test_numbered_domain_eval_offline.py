@@ -52,7 +52,8 @@ class NumberedDomainEval(unittest.TestCase):
                 def choose(k,p,o):
                     # The all-catalog confirmation requires explicit none for a new domain.
                     return {x:(.99 if x=='none' else .001) if '0' in o else .4 for x in o}
-                ports=w.Ports(model,lambda xs:[[0.,0.]]*len(xs),choose,ask)
+                # This case is about ambiguity; its shared fixture catalog name is English, so naming-language checks (#20) are off here.
+                ports=w.Ports(model,lambda xs:[[0.,0.]]*len(xs),choose,ask,area_naming_context=False)
                 result=w.place_identity(kind,unit,{'name':'재고'},catalog,ports,5,document=unit['content'])
                 self.assertEqual(result['new'],probability<.5);self.assertEqual('재고표' in result['chosen']['aliases'],kind=='subject' and probability<.5);self.assertEqual(result['ambiguous_domain_membership' if kind=='domain' else 'ambiguous_same_meaning']['score'],probability)
                 if probability<.5:self.assertEqual(len(result['same_meaning_checks']),1)

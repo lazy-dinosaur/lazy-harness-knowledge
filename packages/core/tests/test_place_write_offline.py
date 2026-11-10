@@ -309,7 +309,7 @@ class DomainDocumentContext(unittest.TestCase):
         for _,_,state,_ in seen:
             self.assertEqual(state['source'],source);self.assertEqual(state['source_start_line'],1)
             self.assertEqual(state['unit'],unit)
-        self.assertEqual(len(named),1);self.assertEqual(set(named[0][1]),{'source','unit','domain','existing'})
+        self.assertEqual(len(named),1);self.assertEqual(set(named[0][1]),{'source','unit','domain','existing','catalog_names'})  # #20
         self.assertEqual(named[0][1]['source'],source)
     def test_actual_058_none_remains_held_after_valid_candidate(self):
         source,unit,catalog,ports,seen,named=self.fixture(.58)
