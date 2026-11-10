@@ -64,7 +64,7 @@ def preflight_validation_receipts(dsn):
             raise Stop(message + ' (missing/unvalidated receipt PK or event FK)')
 
 def _owned_unit_first_plan(home, host, name, binding, dsn=None):
-    from prepare import AREA_SCOPES
+    from scopes import AREA_SCOPES
     from safety import digest
     plan_path = home/'state/plan.json'
     if not plan_path.exists(): raise Stop('exact owned unit-first state plan required')
@@ -108,7 +108,7 @@ def docker(*args):
 def database(binding, *, home=None, name=None, host=None):
     import store_pg as pg
     home=home or HERE; name=name or NAME; host=host or HOST
-    from prepare import PRIOR_REQUIRED_SCOPES
+    from scopes import PRIOR_REQUIRED_SCOPES
     # Fixed fresh namespaces must pass exact ownership before any Docker call.
     state_plan = home/'state/plan.json'
     if (any(home.name == scope or scope in name or scope in host for scope in PRIOR_REQUIRED_SCOPES)

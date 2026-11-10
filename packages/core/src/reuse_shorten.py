@@ -60,7 +60,7 @@ def reuse_q1(plan, home, archive):
 
 if __name__ == '__main__':
     import argparse, json
-    from prepare import scope_home
+    from scopes import scope_home
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--scope', choices=['pilot-area-10','pilot-area'], required=True)
     parser.add_argument('--from-state', type=Path, required=True)
