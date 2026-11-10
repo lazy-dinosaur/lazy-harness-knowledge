@@ -219,7 +219,7 @@ class NamingProposalContract(unittest.TestCase):
             self.assertIn('원문에 기존',request['context']['systemPrompt'])
             self.assertEqual(packet,before)
             self.assertEqual(request['schemaVersion'],'active-worker/1')
-            self.assertEqual(env['promptVersion'],'active-worker-prompt/10')
+            self.assertEqual(env['promptVersion'],'active-worker-prompt/11')
         first=c.naming_proposal_context('domain');first['final_admission']='allowed'
         self.assertEqual(c.naming_proposal_context('domain')['final_admission'],'pending')
         with self.assertRaises(c.WorkerFailure):c.naming_proposal_context('write')

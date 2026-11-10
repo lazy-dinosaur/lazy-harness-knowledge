@@ -204,6 +204,56 @@ def extraction_content_error(item, text):
     return None
 
 
+_LIST_ITEM = re.compile(r'^\s*(?:[-*+]|\d+[.)])\s+')
+
+
+def _indent(line):
+    return len(line) - len(line.lstrip(' '))
+
+
+def inherit_list_introducers(item, text):
+    """Code-owned structural context, not a negation or condition classifier (#24 audit).
+
+    A list item quoted alone loses what its parent list introducer says (for example a unit under
+    \"- Must not:\" reads as a positive fact). Every ancestor list line that ends with ':' (the same
+    introducer shape ``source_modality.structural_context`` exposes) is added verbatim in front of the unit:
+    as extra source ranges + content when the unit content is the whole item line, otherwise as
+    ``inherited_context`` evidence only. Headings stop the walk (the heading path is already context).
+    """
+    ranges_ = item.get('source_ranges')
+    if item.get('judge_partial') or item.get('range_invalid') or not ranges_:
+        return item
+    lines = text.splitlines(); first = ranges_[0][0]
+    if not 1 <= first <= len(lines) or not _LIST_ITEM.match(lines[first - 1]):
+        return item
+    covered = {n for a, b in ranges_ for n in range(a, b + 1)}
+    level = _indent(lines[first - 1]); intro = []
+    for j in range(first - 2, -1, -1):
+        line = lines[j]
+        if not line.strip():
+            continue
+        if line.lstrip().startswith(('#', '```')):
+            break
+        if _indent(line) < level:
+            level = _indent(line)
+            if line.rstrip().endswith(':') and (j + 1) not in covered:
+                intro.append(j + 1)
+            if level == 0:
+                break
+    if not intro:
+        return item
+    intro.sort()
+    out = dict(item, inherited_context=[{'line': n, 'quote': lines[n - 1]} for n in intro])
+    quote = '\n'.join('\n'.join(lines[a - 1:b]) for a, b in ranges_)
+    content = item.get('content')
+    bare = lambda value: _LIST_ITEM.sub('', value.strip(), count=1).strip()
+    if isinstance(content, str) and bare(content) == bare(quote):
+        new_ranges = [[n, n] for n in intro] + [list(r) for r in ranges_]
+        out['source_ranges'] = new_ranges
+        out['content'] = '\n'.join('\n'.join(lines[a - 1:b]) for a, b in new_ranges).strip()
+    return out
+
+
 def checkpoint(path, inputs, effect):
     binding = digest(inputs)
     if path.exists():
@@ -330,7 +380,8 @@ def judge_input(ports: Ports, key: str, text: str, *, origin: str, migration: bo
                 if fingerprint in seen: continue
                 seen.add(fingerprint)
             merged.append(item)
-    return reextract_ungrounded_targets(ports, key, text, merged)
+    # #24 audit: keep each list item's parent introducer (e.g. 'Must not:') with the unit.
+    return [inherit_list_introducers(item, text) for item in reextract_ungrounded_targets(ports, key, text, merged)]
 
 
 def reextract_ungrounded_targets(ports, key, text, items):
