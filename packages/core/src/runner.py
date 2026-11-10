@@ -489,7 +489,8 @@ def main():
             request = urllib.request.Request(base.rstrip("/") + "/v1/systemone",
                 data=json.dumps(output).encode("utf-8"),
                 headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(request, timeout=30) as reply:
+            import host_defaults
+            with host_defaults.judgement_http()(request, timeout=30) as reply:
                 output = json.load(reply)
     print(json.dumps(output, ensure_ascii=False))
 

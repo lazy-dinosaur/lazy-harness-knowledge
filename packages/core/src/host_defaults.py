@@ -23,3 +23,23 @@ def writer_factory():
 
 def worker_factory():
     return _factory('active_worker_transport', 'make_worker')
+
+
+_installed_judgement_http = None
+
+
+def install_judgement_http(send):
+    """The composition layer supplies judgement transport: send(request, timeout=...) -> context manager yielding a
+    file-like JSON response (urllib.request.urlopen shape). Pass None to fall back to the host adapter by name."""
+    global _installed_judgement_http
+    _installed_judgement_http = send
+
+
+def judgement_http():
+    """Judgement transport, resolved at call time: installed > hosts/jev (``jev_http.send``) > HostUnavailable."""
+    return _installed_judgement_http or _factory('jev_http', 'send')
+
+
+def lazy_judgement_http(*args, **kwargs):
+    """Call-time resolution so building a judge never needs a host; only sending does."""
+    return judgement_http()(*args, **kwargs)

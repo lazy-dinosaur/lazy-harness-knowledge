@@ -13,6 +13,11 @@ Ports (all synchronous callables):
 - ``writer(stage, packet) -> dict``               role-bound writer call (stage: 'write' | 'rewrite')
 - ``worker(role, packet) -> dict``                role-bound worker call (extract, reextract, domain-name, ...)
 
+Judgement transport (resolved at call time by ``host_defaults.judgement_http``): the core builds every Jev request and
+never performs that network exchange itself. ``send(request, timeout=...)`` returns a context manager yielding the JSON
+response (``urllib.request.urlopen`` shape). Order: a transport installed by the composition layer
+(``host_defaults.install_judgement_http``) > the Jev host (``hosts/jev``, ``jev_http.send``) > ``HostUnavailable``.
+
 Factories a host provides (``host_defaults`` finds them by module name, or callers inject them):
 
 - ``writer_factory(paid) -> writer``

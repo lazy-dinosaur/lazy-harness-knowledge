@@ -10,7 +10,8 @@ Jev access is injected (`judge`) so tests run offline."""
 import json
 import re
 import time
-from urllib.request import Request, urlopen
+from urllib.request import Request
+import host_defaults
 
 _KQ_BASE = ("items[{i}] 는 이번 작업의 한 문장(또는 코드 변경 요약 한 줄)이다. conversation 흐름상 이 문장이 미래 작업자가 알아야 할 "
       "제품·시스템 지식(확정된 결정·규칙·금지·동작·조건·코드 경로의 역할·테스트가 보호하는 것, 사용자가 요구·동의했거나 거부하지 않은 방침)을 "
@@ -48,7 +49,8 @@ CHUNK = 20
 MAX_UNITS = 400
 
 
-def request_answers(cfg, body, http=urlopen, *, max_attempts=2):
+def request_answers(cfg, body, http=None, *, max_attempts=2):
+    http = http or host_defaults.lazy_judgement_http
     """One accounted HTTP request path shared by text batches and whole-state questions."""
     if max_attempts not in (1, 2): raise ValueError('max_attempts must be 1 or 2')
     data = None
@@ -66,7 +68,8 @@ def request_answers(cfg, body, http=urlopen, *, max_attempts=2):
     return data['answers']
 
 
-def make_judge(cfg, http=urlopen, *, max_attempts=2, text_limit=600):
+def make_judge(cfg, http=None, *, max_attempts=2, text_limit=600):
+    http = http or host_defaults.lazy_judgement_http
     """judge(state, texts, question, criteria=None) -> list[answer dict]; noul when criteria is None, else choice."""
     if max_attempts not in (1, 2):
         raise ValueError("max_attempts must be 1 or 2")
