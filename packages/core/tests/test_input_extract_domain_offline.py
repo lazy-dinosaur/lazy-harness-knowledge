@@ -1,5 +1,5 @@
 """Stage1→2→3 contracts against actual product functions, never paid services."""
-import test_offline  # Install existing no network/process/DB guard before app imports.
+import offline_guard as test_offline  # noqa: F401  socket/process guards installed BEFORE application imports
 import copy
 import hashlib
 import tempfile

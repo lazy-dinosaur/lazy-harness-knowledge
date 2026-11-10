@@ -1,12 +1,12 @@
 """Typed unit-first acceptance; guard installed before any application imports."""
-import test_offline
+import generation
+import offline_guard as test_offline  # noqa: F401  socket/process guards installed BEFORE application imports
 import copy
 import hashlib
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
-import pipeline as p
 import place_write as w
 import place_write_absorb as a
 import source_grounding as sg
@@ -77,7 +77,7 @@ class UnitFirst(unittest.TestCase):
         save(self.home/'state/plan.json',self.plan)
         save(self.home/'state/area-catalog.json',{'confirmed_by_user':True,'plan_sha':digest(self.plan),'areas':[{'name':'주문관리','description':'예약을 다루는 업무 영역'}]})
         self.paid=Mock(); self.fake=Fake(self.text)
-        patcher=patch.object(p,'HERE',self.home); patcher.start(); self.addCleanup(patcher.stop)
+        patcher=patch.object(generation,'HERE',self.home); patcher.start(); self.addCleanup(patcher.stop)
     def run_phases(self, fake=None):
         fake=fake or self.fake
         for phase in ('judge','place','write','ground'):
@@ -212,12 +212,6 @@ class UnitFirst(unittest.TestCase):
         with self.assertRaises(Stop): w.assert_completed({**self.plan,'host':'other'},self.home)
         (self.home/'v1/record.md').write_text(self.text+'changed')
         with self.assertRaises(Stop): w.assert_completed(self.plan,self.home)
-    def test_plan_code_drift_guard_unchanged(self):
-        plan={'records':[], 'questions':[], 'code':{'src/place_write.py':hashlib.sha256((p.RUNNER/'src/place_write.py').read_bytes()).hexdigest()}}
-        with patch.object(p,'inputs',return_value=([],[])):
-            p.verify_plan(plan)
-            plan['code']['src/place_write.py']='bad'
-            with self.assertRaises(Stop): p.verify_plan(plan)
     def test_precompute_uses_actual_unit_domains_no_cross_product_no_old_fix(self):
         self.run_phases(); values,generated,_=precompute.inventory(self.plan,self.home)
         self.assertIn('R05',generated)
@@ -236,11 +230,6 @@ class UnitFirst(unittest.TestCase):
             pg._write_form(cur,'h','f',1,fact,'own')
         inserts=[c.args[1] for c in cur.execute.call_args_list if 'insert into knowledge.fragment_leaf' in c.args[0]]
         self.assertTrue(inserts); self.assertTrue(all(row[5] in ('own',None) for row in inserts))
-    def test_unit_ids_one_per_fact_and_readback_uses_them(self):
-        self.run_phases(); g=load(self.home/'state/generated/R05.json')
-        units=p.generated_units(self.r,g)
-        self.assertEqual(len(units),3); self.assertTrue(all(len(fs)==1 for _,_,fs in units))
-        self.assertEqual(len({unit for unit,_,_ in units}),3)
     def test_phase_order_and_uncertain_choice_fail_closed(self):
         with self.assertRaises(Stop): w.run('place',self.plan,self.home,self.paid,self.fake.ports())
         unit={'content':'주문관리파트의 일정표','source_ranges':[[1,1]],'target_expression':'일정표'}

@@ -68,5 +68,8 @@ Order (each step keeps its own tests green before the next):
    Corpus invariants of one host's inputs (expected counts, excluded questions, pilot subsets) live in the inputs folder's
    `manifest.json`, not in code; neutral synthetic inputs in `packages/eval/tests/fixtures/inputs` drive the two formerly
    skipped tests through `prepare` end to end.
+   Mixed test files were split per test case: experiment-runner cases live in `packages/eval/tests/*_eval_offline.py`
+   (sharing setUp/helpers from the core case), offline guards in `packages/core/tests/offline_guard.py`; core tests no
+   longer see `packages/eval` at all (`test_boundaries.py` also checks core tests).
 6. Port contracts + fake conformance tests (issue #1 P4); the pi-fabric implementation is lazy-harness work.
 7. lazy-harness keeps a thin consumer only.
