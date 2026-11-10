@@ -779,7 +779,7 @@ def _place_identity_legacy(kind, unit, domain, catalog, ports, k, document=None)
                         named = role_call(ports, kind+'-name', kind+'-shared-'+digest([working,domain,candidates,name])[:24],
                             {'source':document or unit.get('source_text',unit['content']),'unit':working,'domain':domain,'existing':None,
                              'catalog_names':[row['name'] for row in catalog],
-                             'shared_component_feedback':'E_DOMAIN_SHARED_COMPONENT: "'+str(name)+'" names a business that only uses this shared feature/component'},task)
+                             'shared_component_feedback':'E_DOMAIN_SHARED_COMPONENT: "'+str(name)+'" names a business that only uses this shared feature/component; if catalog_names already contains the shared component context itself, reuse that exact name'},task)
                     except ValueError as exc: raise PlacementHeld(str(exc),trace) from exc
                     name = named.get('name'); description = named.get('description'); concept = named.get('source_concept')
                     if short_name_errors(name,area=True) or not isinstance(description,str) or not description.strip() or len(description)>300 \
@@ -816,7 +816,15 @@ def _place_identity_legacy(kind, unit, domain, catalog, ports, k, document=None)
                 if best and best['score']>=.7:
                     existing=next(row for row in catalog if row['name']==best['candidate'])
                 elif any(r['score']>=.3 for r in coverage):
-                    raise PlacementHeld('new domain coverage is not clearly no (<0.3)',trace)
+                    # S003 paid-5 review (user "계속", option A): in the .3-.7 band ask whether the unit belongs to the top
+                    # covering domain (same membership question as the umbrella child step, >= .7) before holding.
+                    top=next(row for row in catalog if row['name']==best['candidate'])
+                    member=score(ports,{'candidate':{'name':top['name'],'description':top['description']},'unit':working,'domain':domain},DOMAIN_MEMBERSHIP_QUESTION)
+                    trace['coverage_band_membership']={'candidate':top['name'],'coverage':best['score'],'score':member,'member':member>=.7}
+                    if member>=.7:
+                        existing=top
+                    else:
+                        raise PlacementHeld('new domain coverage is not clearly no (<0.3)',trace)
                 if not existing:
                     # Task382: no catch-all — the proposal must not contain or largely overlap ANY existing domain.
                     overlaps=score_many(ports,{'proposed':proposed,'unit':working},
