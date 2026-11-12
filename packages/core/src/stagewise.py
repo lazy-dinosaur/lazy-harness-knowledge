@@ -102,7 +102,8 @@ def run_extract(ports, records, *, host, out=None):
 
 # ---------------------------------------------------------------- stages 2-3: domain and subject placement
 
-def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, skip_units=None, second_pass=False, upper_grouping=False):
+def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, skip_units=None, second_pass=False, upper_grouping=False,
+              one_home=False):
     """Stages 2 (domain) and 3 (subject) from a user-passed extract report and a named snapshot.
 
     Mirrors place_write.run: domain first, then subject inside the chosen domain; successful choices update the
@@ -125,7 +126,12 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
         unit = row['unit']; placement = {}
         text = extract_report['sources'][row['record_id']]
         held = None
+        home = w.cross_domain_home(unit, domains, subjects, ports) if one_home else None
         for kind in ('domain', 'subject'):
+            if kind == 'domain' and home and home.get('domain'):
+                # one home per target: the existing subject's domain, no new domain search
+                placement['domain'] = {'chosen': copy.deepcopy(home['domain']), 'new': False, 'one_home': home['trace']}
+                continue
             catalog = domains if kind == 'domain' else subjects.get(placement['domain']['chosen']['name'], [])
             try:
                 placement[kind] = w.place_identity(kind, unit, placement.get('domain', {}).get('chosen'), catalog, ports, top_k, document=text)
@@ -150,13 +156,15 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
             if dtrace.get('new') and dtrace.get('chosen') and not (held and held['where'] == 'domain'):
                 grouping = ug.attach_new_domain(dtrace['chosen'], groupings, domains, ports)
             elif dtrace.get('umbrella_candidate'):
-                grouping = ug.from_umbrella(dtrace['umbrella_candidate'], groupings, domains)
+                grouping = ug.from_umbrella(dtrace['umbrella_candidate'], groupings, domains, ports)
         out_row = {'unit_id': unit['unit_id'], 'record_id': row['record_id'], 'index': row['index'],
                    'content': unit['content'], 'target_expression': unit['target_expression'],
                    'domain': summary(placement.get('domain')), 'subject': summary(placement.get('subject')),
                    'held': held, 'trace': placement}
         if grouping is not None:
             out_row['grouping'] = grouping
+        if home is not None:
+            out_row['one_home'] = home['trace']
         return out_row
 
     for row in extract_report['rows']:
@@ -181,7 +189,7 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
             if on_row is not None:
                 on_row(i, rows[i], domains, subjects)
     report = _sealed({'version': VERSION, 'stage': 'place', 'snapshot': base['name'], 'snapshot_sha': base['sha'],
-                      'extract_sha': extract_report['sha'], 'rows': rows, 'second_pass': bool(second_pass),
+                      'extract_sha': extract_report['sha'], 'rows': rows, 'second_pass': bool(second_pass), **({'one_home': True} if one_home else {}),
                       'domains_after': domains, 'subjects_after': subjects,
                       # Task385: upper-grouping candidates (link layer; never a same-level domain, never a copy of knowledge)
                       'umbrella_candidates': [dict(r['domain']['umbrella'], unit_id=r['unit_id']) for r in rows if r.get('domain') and r['domain'].get('umbrella')],
