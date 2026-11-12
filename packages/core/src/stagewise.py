@@ -14,6 +14,7 @@ from uuid import uuid5, NAMESPACE_URL
 
 import tempfile
 import place_write as w
+import upper_grouping as ug
 from safety import load, save, digest
 
 VERSION = 'stagewise/1'
@@ -36,13 +37,15 @@ def _need(cond, message):
 
 # ---------------------------------------------------------------- snapshots
 
-def snapshot(name, domains, subjects, *, parent=None, approval=None, db_dump=None):
+def snapshot(name, domains, subjects, *, parent=None, approval=None, db_dump=None, groupings=None):
     """A named carry-over state. `subjects` maps domain name -> subject rows (subject_id/name/description/aliases)."""
     _need(isinstance(name, str) and name, 'snapshot name required')
     _need(all(isinstance(d, dict) and d.get('name') and 'description' in d for d in domains), 'domain rows need name/description')
     value = {'version': VERSION, 'name': name, 'parent': parent, 'approval': approval, 'db_dump': db_dump,
              'domains': [dict(copy.deepcopy(d), aliases=list(d.get('aliases', []))) for d in domains],
              'subjects': {k: copy.deepcopy(v) for k, v in sorted(subjects.items())}}
+    if groupings is not None:  # upper-grouping links (link only); absent in older snapshots
+        value['groupings'] = copy.deepcopy(groupings)
     value['sha'] = digest({k: v for k, v in value.items() if k != 'sha'})
     return value
 
@@ -99,7 +102,7 @@ def run_extract(ports, records, *, host, out=None):
 
 # ---------------------------------------------------------------- stages 2-3: domain and subject placement
 
-def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, skip_units=None, second_pass=False):
+def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, skip_units=None, second_pass=False, upper_grouping=False):
     """Stages 2 (domain) and 3 (subject) from a user-passed extract report and a named snapshot.
 
     Mirrors place_write.run: domain first, then subject inside the chosen domain; successful choices update the
@@ -115,6 +118,7 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
     base = _checked_snapshot(base)
     domains = copy.deepcopy(base['domains'])
     subjects = copy.deepcopy(base['subjects'])
+    groupings = copy.deepcopy(base.get('groupings') or [])  # upper grouping (user-accepted option A), link only
     rows = []
 
     def place_unit(row):
@@ -140,10 +144,20 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
                 catalog.append(copy.deepcopy(chosen))
             else:
                 catalog[found] = copy.deepcopy(chosen)
-        return {'unit_id': unit['unit_id'], 'record_id': row['record_id'], 'index': row['index'],
-                'content': unit['content'], 'target_expression': unit['target_expression'],
-                'domain': summary(placement.get('domain')), 'subject': summary(placement.get('subject')),
-                'held': held, 'trace': placement}
+        grouping = None
+        if upper_grouping:
+            dtrace = placement.get('domain') or {}
+            if dtrace.get('new') and dtrace.get('chosen') and not (held and held['where'] == 'domain'):
+                grouping = ug.attach_new_domain(dtrace['chosen'], groupings, domains, ports)
+            elif dtrace.get('umbrella_candidate'):
+                grouping = ug.from_umbrella(dtrace['umbrella_candidate'], groupings, domains)
+        out_row = {'unit_id': unit['unit_id'], 'record_id': row['record_id'], 'index': row['index'],
+                   'content': unit['content'], 'target_expression': unit['target_expression'],
+                   'domain': summary(placement.get('domain')), 'subject': summary(placement.get('subject')),
+                   'held': held, 'trace': placement}
+        if grouping is not None:
+            out_row['grouping'] = grouping
+        return out_row
 
     for row in extract_report['rows']:
         unit = row['unit']
@@ -170,7 +184,8 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
                       'extract_sha': extract_report['sha'], 'rows': rows, 'second_pass': bool(second_pass),
                       'domains_after': domains, 'subjects_after': subjects,
                       # Task385: upper-grouping candidates (link layer; never a same-level domain, never a copy of knowledge)
-                      'umbrella_candidates': [dict(r['domain']['umbrella'], unit_id=r['unit_id']) for r in rows if r.get('domain') and r['domain'].get('umbrella')]})
+                      'umbrella_candidates': [dict(r['domain']['umbrella'], unit_id=r['unit_id']) for r in rows if r.get('domain') and r['domain'].get('umbrella')],
+                      **({'groupings_after': groupings} if upper_grouping else {})})
     if out is not None:
         save(Path(out) / 'place.json', report)
     return report
@@ -197,7 +212,8 @@ def promote(base, place_report, name):
     base = _checked_snapshot(base)
     _need(place_report['snapshot_sha'] == base['sha'], 'place report was not produced from this snapshot')
     return snapshot(name, place_report['domains_after'], place_report['subjects_after'],
-                    parent=base['name'], approval=place_report['approval'], db_dump=base.get('db_dump'))
+                    parent=base['name'], approval=place_report['approval'], db_dump=base.get('db_dump'),
+                    groupings=place_report.get('groupings_after', base.get('groupings')))
 
 
 # ---------------------------------------------------------------- stages 4-5: writing and Q1/Q2 review

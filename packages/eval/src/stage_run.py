@@ -202,7 +202,7 @@ def run(plan, *, dry, ports_factory, out_dir=None, broker=None):
         else:
             base = load(Path(plan['base']))
             for rid, path in plan['extracts'].items():
-                report = sw.run_place(ports, load(Path(path)), base, second_pass=bool(plan.get('second_pass')),
+                report = sw.run_place(ports, load(Path(path)), base, second_pass=bool(plan.get('second_pass')), upper_grouping=bool(plan.get('upper_grouping')),
                                       on_row=lambda i, row, d, s, rid=rid: save(out / ('stage2-row-%s-%03d.json' % (rid, i)), {'row': row, 'domains': [x['name'] for x in d]}))
                 save(out / ('stage2-place-%s.json' % rid), report); reports[rid] = report['sha']
                 base = sw.snapshot('in-run-after-' + rid, report['domains_after'], report['subjects_after'], parent=base['name'], db_dump=base.get('db_dump'))
