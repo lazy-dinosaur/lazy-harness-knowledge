@@ -52,6 +52,23 @@ def name_error(proposal, groupings, catalog):
     return None
 
 
+TOP_K = 5
+
+
+def _vector(ports, group):
+    # Searchable like domains and subjects (user: every layer has a description that vector search can hit).
+    return w.checked_vectors(ports.encode([w.identity_text('domain', group)]), 1)[0]
+
+
+def _shortlist(domain, groupings, ports):
+    """Vector top-K groupings for a domain (all of them when few or when vectors are missing)."""
+    if len(groupings) <= TOP_K or any('vector' not in g for g in groupings):
+        return list(groupings)
+    from subject_dict import cos
+    query = domain.get('vector') or w.checked_vectors(ports.encode([w.identity_text('domain', domain)]), 1)[0]
+    return sorted(groupings, key=lambda g: (-cos(query, g['vector']), g['name']))[:TOP_K]
+
+
 def attach_new_domain(domain, groupings, catalog, ports, *, threshold=THRESHOLD):
     """Attach a newly created domain to a grouping, or create a grouping with ungrouped partners. Mutates groupings."""
     event = {'domain': domain['name'], 'action': 'none'}
@@ -59,14 +76,15 @@ def attach_new_domain(domain, groupings, catalog, ports, *, threshold=THRESHOLD)
         event['action'] = 'already-grouped'
         return event
     if groupings:
+        short = _shortlist(domain, groupings, ports)
         candidates = [{'name': g['name'], 'description': g['description'], 'example': '묶인 도메인: ' + ', '.join(g['members'])}
-                      for g in groupings]
+                      for g in short]
         scores = w.score_many(ports, {'proposed': _row(domain)}, candidates, MEMBER_QUESTION)
-        event['member_checks'] = [{'group': g['name'], 'score': s} for g, s in zip(groupings, scores)]
-        best = max(range(len(groupings)), key=lambda i: scores[i])
+        event['member_checks'] = [{'group': g['name'], 'score': s} for g, s in zip(short, scores)]
+        best = max(range(len(short)), key=lambda i: scores[i])
         if scores[best] >= threshold:
-            groupings[best]['members'].append(domain['name'])
-            event.update(action='attached', group=groupings[best]['name'])
+            short[best]['members'].append(domain['name'])
+            event.update(action='attached', group=short[best]['name'])
             return event
     grouped = _grouped(groupings)
     others = [d for d in catalog if d['name'] != domain['name'] and d['name'] not in grouped]
@@ -90,12 +108,13 @@ def attach_new_domain(domain, groupings, catalog, ports, *, threshold=THRESHOLD)
         return event
     group = {'name': named['name'].strip(), 'description': named['description'].strip(),
              'members': [d['name'] for d in members], 'origin': 'pair'}
+    group['vector'] = _vector(ports, group)
     groupings.append(group)
     event.update(action='created', group=group['name'], members=list(group['members']))
     return event
 
 
-def from_umbrella(umbrella, groupings, catalog):
+def from_umbrella(umbrella, groupings, catalog, ports=None):
     """A new-domain proposal that covers existing domains (Task385) becomes a grouping over them. Mutates groupings."""
     covered = [c['domain'] for c in umbrella.get('covers', []) if any(d['name'] == c['domain'] for d in catalog)]
     event = {'umbrella': umbrella.get('name'), 'covers': covered, 'action': 'none'}
@@ -114,6 +133,8 @@ def from_umbrella(umbrella, groupings, catalog):
         event.update(action='naming-rejected', reason=error)
         return event
     group = {'name': umbrella['name'].strip(), 'description': umbrella['description'].strip(), 'members': free, 'origin': 'umbrella'}
+    if ports is not None:
+        group['vector'] = _vector(ports, group)
     groupings.append(group)
     event.update(action='created', group=group['name'], members=list(free))
     return event

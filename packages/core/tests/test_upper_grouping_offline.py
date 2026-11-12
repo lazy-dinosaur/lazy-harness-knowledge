@@ -38,7 +38,8 @@ class UpperGrouping(unittest.TestCase):
         groupings = []
         event = ug.attach_new_domain(new, groupings, CATALOG + [new], p)
         self.assertEqual(event['action'], 'created')
-        self.assertEqual(groupings, [{'name': '시간관리', 'description': '예약과 일정처럼 시간을 다루는 업무군', 'members': ['일정', '예약'], 'origin': 'pair'}])
+        self.assertEqual({k: v for k, v in groupings[0].items() if k != 'vector'}, {'name': '시간관리', 'description': '예약과 일정처럼 시간을 다루는 업무군', 'members': ['일정', '예약'], 'origin': 'pair'})
+        self.assertEqual(groupings[0]['vector'], [0., 1.])
         self.assertEqual(seen[0][0], 'group-name'); self.assertEqual([d['name'] for d in seen[0][1]['domains']], ['일정', '예약'])
 
     def test_a_new_domain_joins_an_existing_grouping_without_revising_it(self):

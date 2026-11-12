@@ -552,6 +552,30 @@ DOMAIN_COVERED_QUESTION = DOMAIN_CRITERION + (
     '예: 물류(배송·창고·출고) 안의 출고는 예, 인사 안의 재고는 아니오. 예/아니오 확률로 답한다.')
 
 
+def cross_domain_home(unit, domains, subjects, ports, *, threshold=.7):
+    """One home per target at write time (user direction "저장할 때마다 규칙", p2-domain-place-1: `사용자` split
+    계정/고객). If a subject with the unit's exact target name/alias already lives in exactly one domain, ask once whether
+    it is the same entity (SAME_QUESTION >= threshold) and, if so, return that domain as the unit's home. Homonyms
+    (same name, different entity) stay on the normal path. Returns {'domain': row|None, 'trace': {...}} or None."""
+    target = unit['target_expression']
+    hits = [(name, row) for name, rows in subjects.items() for row in rows
+            if any(_norm(target) == _norm(n) for n in [row['name'], *row.get('aliases', [])])]
+    if not hits:
+        return None
+    trace = {'target': target, 'hits': [{'domain': d, 'subject': r['name']} for d, r in hits]}
+    if len({d for d, _ in hits}) > 1:
+        trace['reason'] = 'target already in several domains; normal placement'
+        return {'domain': None, 'trace': trace}
+    name, row = hits[0]
+    domain = next((d for d in domains if d['name'] == name), None)
+    if domain is None:
+        return None
+    same = score(ports, {'candidate': {'name': row['name'], 'description': row.get('description', '')},
+                         'proposed': {'name': target, 'description': unit['content']}, 'unit': unit, 'domain': domain}, SAME_QUESTION)
+    trace.update(domain=name, subject=row['name'], same=same, home=same >= threshold)
+    return {'domain': domain if same >= threshold else None, 'trace': trace}
+
+
 def exact_identity(expression, catalog, trace):
     hits = [row for row in catalog if any(_norm(expression)==_norm(n) for n in [row['name'],*row.get('aliases',[])])]
     identities = {row.get('subject_id',row['name']) for row in hits}
