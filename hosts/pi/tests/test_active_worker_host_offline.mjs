@@ -27,7 +27,7 @@ const {ModelRuntime}=await import(pathToFileURL(path.resolve(process.argv[3])).h
 const {completeRole,validateRoleRequest}=await import('../src/active_worker_host.mjs');
 const {completeWriter}=await import('../src/writer_host.mjs');
 const captures=JSON.parse(fs.readFileSync(path.join(root,'active-caller-capture.json'),'utf8'));
-assert.equal(captures.length,7);  // 6 roles + the domain-name re-ask with catalog names and feedback
+assert.equal(captures.length,8);  // 7 roles (incl. group-name) + the domain-name re-ask with catalog names and feedback
 let authReads=0,checks=0,wireCount=0;
 const credentials={read:async provider=>{assert.equal(provider,'openai');authReads++;return {type:'api_key',key:'FAKE_HOST_ONLY_KEY'};},list:async()=>[],modify:forbidden,delete:forbidden};
 const runtime=await ModelRuntime.create({credentials,modelsPath:null,allowModelNetwork:false,refreshOnCreate:false});
@@ -87,7 +87,7 @@ function changedRequest(original,change) {
 }
 for (const capture of captures.filter(c=>['domain-name','subject-name'].includes(c.request.role))) {
   const env=JSON.parse(capture.request.context.messages[0].content);
-  assert.equal(env.promptVersion,'active-worker-prompt/11');
+  assert.equal(env.promptVersion,'active-worker-prompt/12');
   assert.equal(env.data.naming_context.final_admission,'pending');checks++;
   for (const change of [e=>delete e.data.naming_context,
       e=>e.data.naming_context.scope=e.role==='domain-name'?'subject':'domain',
@@ -100,7 +100,7 @@ for (const capture of captures.filter(c=>['domain-name','subject-name'].includes
   }
   assert.throws(()=>validateRoleRequest(changedRequest(capture.request,e=>e.promptVersion='active-worker-prompt/1'),1000000),e=>e.code==='E_WORKER_BINDING');checks++;
 }
-assert.equal(wireCount,7);  // one wire per capture, including the re-ask
+assert.equal(wireCount,8);  // one wire per capture, including the re-ask and the group-name role
 const writerCaptures=JSON.parse(fs.readFileSync(path.join(root,'active-writer-capture.json'),'utf8'));
 assert.equal(writerCaptures.length,2);
 for (const capture of writerCaptures) {

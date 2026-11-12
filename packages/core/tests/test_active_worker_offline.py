@@ -35,6 +35,9 @@ def evidence(role):
     if role in ('reextract','domain-name','subject-name'):
         packet={'source':RAW,'unit':unit,'domain':{'name':'물류','description':'물류 업무','aliases':[],'secret':'PRIVATE_DSN'},'existing':None,'failure_reason':'DDD failed','parent':'PARENT_TRANSCRIPT'}
         return packet
+    if role=='group-name':
+        return {'domains':[{'name':'물류','description':RAW,'secret':'PRIVATE_DSN'},{'name':'재고','description':'재고 업무','aliases':[]}],
+                'existing_groups':['인사'],'parent':'PARENT_TRANSCRIPT'}
     return {'domain':'물류','name':'배송함','description':'기존 설명','subject_type':'entity',
             'subjects':[{'name':'배송함','description':'보관 대상','subject_id':'PRIVATE_UUID','parent_name':None}],
             'fragments':[('fragment-ref',RAW,{'evidence_refs':[{'locator':'box.py#L1','quote':RAW,'secret':'PRIVATE_DSN'}],'dsn':'PRIVATE_DSN'})],
@@ -45,6 +48,7 @@ def reply(role):
     if role=='reextract': return {'target_expression':'배송함','reason':'소유 객체'}
     if role in ('domain-name','subject-name'): return {'original_expression':'배송함','source_concept':'배송함','name':'물류' if role=='domain-name' else '배송함','description':'원문 업무 대상'}
     if role=='describe': return {'description':'배송함은 원문 보관 대상이다.'}
+    if role=='group-name': return {'name':'공급망','description':'물류와 재고를 묶는 업무군'}
     return {'relation':'unknown','description_comparison':'근거 부족','evidence':[]}
 
 class ActiveContracts(unittest.TestCase):
@@ -219,7 +223,7 @@ class NamingProposalContract(unittest.TestCase):
             self.assertIn('원문에 기존',request['context']['systemPrompt'])
             self.assertEqual(packet,before)
             self.assertEqual(request['schemaVersion'],'active-worker/1')
-            self.assertEqual(env['promptVersion'],'active-worker-prompt/11')
+            self.assertEqual(env['promptVersion'],'active-worker-prompt/12')
         first=c.naming_proposal_context('domain');first['final_admission']='allowed'
         self.assertEqual(c.naming_proposal_context('domain')['final_admission'],'pending')
         with self.assertRaises(c.WorkerFailure):c.naming_proposal_context('write')

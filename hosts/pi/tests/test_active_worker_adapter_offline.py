@@ -55,7 +55,7 @@ class ActiveContractsPi(unittest.TestCase):
             worker=t.make_worker(paid,inspect=lambda:{'ok':True,'inputBudget':1000000},send=lambda r:{'ok':True,'text':json.dumps(reply(r['role'])),'cost':0.01})
             for role in c.ROLES: worker(role,evidence(role))
             done=[r for r in paid.ledger.rows if r['state']=='done']
-            self.assertEqual([r['step'] for r in done],['generation']*4+['maintenance']*2)
+            self.assertEqual([r['step'] for r in done],['generation']*4+['maintenance']*2+['generation'])  # group-name is placement-time (generation)
             self.assertTrue(all(r['account']=='subscription' and r['model']=='Luna' for r in done))
             for row in done:
                 result=load(Path(tmp)/row['result'])

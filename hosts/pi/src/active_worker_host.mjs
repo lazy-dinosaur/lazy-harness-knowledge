@@ -4,7 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
 import {HostFailure, completeIsolated, inspectRuntime, loadRuntime} from './writer_host.mjs';
 const fail = code => {throw new HostFailure(code);};
-const roles = new Set(['extract','reextract','domain-name','subject-name','describe','merge-luna']);
+const roles = new Set(['extract','reextract','domain-name','subject-name','describe','merge-luna','group-name']);
 const canonical = value => JSON.stringify(value && typeof value === 'object' ? (Array.isArray(value) ? value.map(v=>JSON.parse(canonical(v))) : Object.fromEntries(Object.keys(value).sort().map(k=>[k,JSON.parse(canonical(value[k]))]))) : value);
 const digest = value => createHash('sha256').update(canonical(value)).digest('hex');
 const keys = (v, expected) => v && Object.keys(v).sort().join(',') === expected.split(',').sort().join(',');
@@ -16,7 +16,7 @@ export function validateRoleRequest(request, budget) {
   if (!keys(message,'role,content,timestamp') || message.role!=='user' || message.timestamp!==0 || typeof message.content!=='string') fail('E_WORKER_INPUT');
   let env;
   try {env=JSON.parse(message.content);} catch {fail('E_WORKER_INPUT');}
-  if (!keys(env,'schemaVersion,promptVersion,role,sourceBinding,selectionBinding,data,inputBinding') || env.schemaVersion!==request.schemaVersion || env.promptVersion!=='active-worker-prompt/11' || env.role!==request.role) fail('E_WORKER_BINDING');
+  if (!keys(env,'schemaVersion,promptVersion,role,sourceBinding,selectionBinding,data,inputBinding') || env.schemaVersion!==request.schemaVersion || env.promptVersion!=='active-worker-prompt/12' || env.role!==request.role) fail('E_WORKER_BINDING');
   if (![env.sourceBinding,env.selectionBinding,env.inputBinding,request.binding].every(v=>typeof v==='string' && /^[a-f0-9]{64}$/.test(v))) fail('E_WORKER_BINDING');
   const binding=digest([env.schemaVersion,env.promptVersion,'openai/gpt-6-luna:medium',env.role,ctx.systemPrompt]);
   const {inputBinding,...unsigned}=env;
@@ -28,6 +28,7 @@ export function validateRoleRequest(request, budget) {
     'subject-name':'source,source_raw,unit,domain,existing,naming_context',
     describe:'domain,name,subject_type,description,fragments,subjects,domains',
     'merge-luna':'domain,name,subject_type,description,fragments,subjects,domains',
+    'group-name':'domains,existing_groups',
   }[request.role].split(',');
   // Task363-N: domain-name may carry OPTIONAL existing area names (language/breadth reference only).
   const optional = request.role==='domain-name' && 'catalog_names' in (env.data||{}) ? ['catalog_names'] : [];
