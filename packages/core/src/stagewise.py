@@ -120,13 +120,14 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
     domains = copy.deepcopy(base['domains'])
     subjects = copy.deepcopy(base['subjects'])
     groupings = copy.deepcopy(base.get('groupings') or [])  # upper grouping (user-accepted option A), link only
+    counts = {}  # (domain, subject) -> placed units in this run, for the one-home tie break
     rows = []
 
     def place_unit(row):
         unit = row['unit']; placement = {}
         text = extract_report['sources'][row['record_id']]
         held = None
-        home = w.cross_domain_home(unit, domains, subjects, ports) if one_home else None
+        home = w.cross_domain_home(unit, domains, subjects, ports, counts=counts) if one_home else None
         for kind in ('domain', 'subject'):
             if kind == 'domain' and home and home.get('domain'):
                 # one home per target: the existing subject's domain, no new domain search
@@ -150,6 +151,9 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
                 catalog.append(copy.deepcopy(chosen))
             else:
                 catalog[found] = copy.deepcopy(chosen)
+        if not held and (placement.get('domain') or {}).get('chosen') and (placement.get('subject') or {}).get('chosen'):
+            key = (placement['domain']['chosen']['name'], placement['subject']['chosen']['name'])
+            counts[key] = counts.get(key, 0) + 1
         grouping = None
         if upper_grouping:
             dtrace = placement.get('domain') or {}
