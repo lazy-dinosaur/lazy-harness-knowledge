@@ -103,7 +103,7 @@ def run_extract(ports, records, *, host, out=None):
 # ---------------------------------------------------------------- stages 2-3: domain and subject placement
 
 def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, skip_units=None, second_pass=False, upper_grouping=False,
-              one_home=False, resume_rows=None):
+              one_home=False, resume_rows=None, warrant=False):
     """Stages 2 (domain) and 3 (subject) from a user-passed extract report and a named snapshot.
 
     Mirrors place_write.run: domain first, then subject inside the chosen domain; successful choices update the
@@ -113,6 +113,9 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
     resume_rows ({index: {'row': saved_row, 'groupings': [...]}}, #24 runner defect): first-pass rows saved by an earlier
     stopped run are reused without any new call; their catalog effects (domains, subjects, counts) are replayed in order
     and the groupings saved with the last reused row are restored. Second-pass rows are not reused.
+    warrant (user option A1, "추천대로 가봐 그러면"): a unit held only because an existing domain partly covers its new-domain
+    proposal (coverage .3-.7) records that proposal; when a second unit proposes the same name (exact, normalized), the
+    domain is created at that save and every unit that proposed it is placed into it in the same step (no later job).
     second_pass (S003 review, user "추천대로 진행해줘"): after all units, units held at the domain or subject step are placed
     ONCE more against the catalog grown during the run (a shared-kernel domain created late can then take the earlier
     units). Held rows keep their first-pass hold as `first_hold`; extract-flagged and carried units are never retried.
@@ -142,6 +145,34 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
             key = (placement['domain']['chosen']['name'], placement['subject']['chosen']['name'])
             counts[key] = counts.get(key, 0) + 1
 
+    pending = {}  # normalized proposed domain name -> [row positions held in the coverage band]
+    by_index = {r['index']: r for r in extract_report['rows']}
+
+    def maybe_warrant(pos):
+        done = rows[pos]; held = done.get('held') or {}
+        if held.get('where') != 'domain' or 'coverage is not clearly no' not in held.get('reason', ''):
+            return
+        proposal = ((done.get('trace') or {}).get('domain') or {}).get('proposal') or {}
+        name = proposal.get('name')
+        if not isinstance(name, str) or not name.strip() or any(w._norm(d['name']) == w._norm(name) for d in domains):
+            return
+        members = pending.setdefault(w._norm(name), [])
+        members.append(pos)
+        if len(members) < 2:
+            done['warrant'] = {'name': name, 'pending': 1}
+            return
+        domain = {'name': name.strip(), 'description': (proposal.get('description') or '').strip(), 'aliases': [],
+                  'source_concept': proposal.get('source_concept')}
+        domain['vector'] = w.checked_vectors(ports.encode([w.identity_text('domain', domain)]), 1)[0]
+        info = {'name': domain['name'], 'members': [rows[p]['index'] for p in members]}
+        for k, p in enumerate(list(members)):
+            first_hold = rows[p].get('held')
+            again = place_unit(by_index[rows[p]['index']], forced=(domain, k == 0, info))
+            again['warrant'] = dict(info, first_hold=first_hold)
+            rows[p] = again
+            notify(p)
+        del pending[w._norm(name)]
+
     def notify(index):
         if on_row is None:
             return
@@ -151,12 +182,16 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
         else:
             on_row(index, rows[index], domains, subjects)
 
-    def place_unit(row):
+    def place_unit(row, forced=None):
         unit = row['unit']; placement = {}
         text = extract_report['sources'][row['record_id']]
         held = None
-        home = w.cross_domain_home(unit, domains, subjects, ports, counts=counts) if one_home else None
+        home = w.cross_domain_home(unit, domains, subjects, ports, counts=counts) if one_home and not forced else None
         for kind in ('domain', 'subject'):
+            if kind == 'domain' and forced:
+                # warrant: the domain created from repeated proposals; only the subject step runs
+                placement['domain'] = {'chosen': copy.deepcopy(forced[0]), 'new': forced[1], 'warrant': forced[2]}
+                continue
             if kind == 'domain' and home and home.get('domain'):
                 # one home per target: the existing subject's domain, no new domain search
                 placement['domain'] = {'chosen': copy.deepcopy(home['domain']), 'new': False, 'one_home': home['trace']}
@@ -204,6 +239,8 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
                          'held': {'where': 'carried' if reason else 'extract', 'reason': reason or ','.join(row['flags'])}})
         else:
             rows.append(place_unit(row))
+            if warrant:
+                maybe_warrant(len(rows) - 1)
         notify(len(rows) - 1)
     if second_pass:
         by_id = {r['unit']['unit_id']: r for r in extract_report['rows']}
@@ -215,7 +252,7 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
             rows[i] = again
             notify(i)
     report = _sealed({'version': VERSION, 'stage': 'place', 'snapshot': base['name'], 'snapshot_sha': base['sha'],
-                      'extract_sha': extract_report['sha'], 'rows': rows, 'second_pass': bool(second_pass), **({'one_home': True} if one_home else {}),
+                      'extract_sha': extract_report['sha'], 'rows': rows, 'second_pass': bool(second_pass), **({'one_home': True} if one_home else {}), **({'warrant': True} if warrant else {}),
                       'domains_after': domains, 'subjects_after': subjects,
                       # Task385: upper-grouping candidates (link layer; never a same-level domain, never a copy of knowledge)
                       'umbrella_candidates': [dict(r['domain']['umbrella'], unit_id=r['unit_id']) for r in rows if r.get('domain') and r['domain'].get('umbrella')],
