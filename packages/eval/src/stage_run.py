@@ -17,7 +17,8 @@ Plan (JSON, kept outside the repository, e.g. in the state home)::
 
 A run name keeps one cash cap across restarts: accounting is persisted after every counted attempt
 (``accounting-live.json``); a paid run whose folder already has accounting is refused unless the plan says
-``"resume": true``, which continues the counters and cash (an in-flight Jev reserve counts as spent).
+``"resume": true``, which continues the counters and cash (an in-flight Jev reserve counts as spent), skips records whose
+place report exists and reuses the first-pass rows already saved for the unfinished record (no new call for them).
 
 The cash numbers are the user's decision (lazy-harness SSOT), never inferred here.
 """
@@ -201,11 +202,26 @@ def run(plan, *, dry, ports_factory, out_dir=None, broker=None):
                 save(out / ('stage1-extract-%s.json' % rec['record_id']), report); reports[rec['record_id']] = report['sha']
         else:
             base = load(Path(plan['base']))
+            resuming = bool(plan.get('resume')) and not dry
             for rid, path in plan['extracts'].items():
-                report = sw.run_place(ports, load(Path(path)), base, second_pass=bool(plan.get('second_pass')), upper_grouping=bool(plan.get('upper_grouping')), one_home=bool(plan.get('one_home')),
-                                      on_row=lambda i, row, d, s, rid=rid: save(out / ('stage2-row-%s-%03d.json' % (rid, i)), {'row': row, 'domains': [x['name'] for x in d]}))
-                save(out / ('stage2-place-%s.json' % rid), report); reports[rid] = report['sha']
-                base = sw.snapshot('in-run-after-' + rid, report['domains_after'], report['subjects_after'], parent=base['name'], db_dump=base.get('db_dump'))
+                done = out / ('stage2-place-%s.json' % rid)
+                if resuming and done.exists():
+                    # #24 runner defect: a resumed run skips records it already finished (no new call).
+                    report = load(done)
+                else:
+                    resume_rows = None
+                    if resuming:
+                        resume_rows = {}
+                        for f in sorted(out.glob('stage2-row-%s-*.json' % rid)):
+                            saved = load(f); resume_rows[saved['row']['index']] = saved
+                    report = sw.run_place(ports, load(Path(path)), base, second_pass=bool(plan.get('second_pass')), upper_grouping=bool(plan.get('upper_grouping')), one_home=bool(plan.get('one_home')),
+                                          resume_rows=resume_rows,
+                                          on_row=lambda i, row, d, s, g, rid=rid: save(out / ('stage2-row-%s-%03d.json' % (rid, i)), {'row': row, 'domains': [x['name'] for x in d], 'groupings': g}))
+                    save(done, report)
+                reports[rid] = report['sha']
+                # #24 runner defect: upper groupings carry from one record to the next within a run.
+                base = sw.snapshot('in-run-after-' + rid, report['domains_after'], report['subjects_after'], parent=base['name'], db_dump=base.get('db_dump'),
+                                   groupings=report.get('groupings_after', base.get('groupings')))
     except Stop as exc:
         outcome = str(exc)
     finally:

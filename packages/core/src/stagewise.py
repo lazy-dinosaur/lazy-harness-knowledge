@@ -103,13 +103,16 @@ def run_extract(ports, records, *, host, out=None):
 # ---------------------------------------------------------------- stages 2-3: domain and subject placement
 
 def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, skip_units=None, second_pass=False, upper_grouping=False,
-              one_home=False):
+              one_home=False, resume_rows=None):
     """Stages 2 (domain) and 3 (subject) from a user-passed extract report and a named snapshot.
 
     Mirrors place_write.run: domain first, then subject inside the chosen domain; successful choices update the
     in-run catalogs exactly as the pipeline does. HOLDs stay HOLDs (no rescue path).
     Task380c: `on_row(index, row, domains, subjects)` is called after every unit so a caller can persist progress;
     a run stopped midway keeps every judged unit (identical requests are answered from the ledger on rerun).
+    resume_rows ({index: {'row': saved_row, 'groupings': [...]}}, #24 runner defect): first-pass rows saved by an earlier
+    stopped run are reused without any new call; their catalog effects (domains, subjects, counts) are replayed in order
+    and the groupings saved with the last reused row are restored. Second-pass rows are not reused.
     second_pass (S003 review, user "추천대로 진행해줘"): after all units, units held at the domain or subject step are placed
     ONCE more against the catalog grown during the run (a shared-kernel domain created late can then take the earlier
     units). Held rows keep their first-pass hold as `first_hold`; extract-flagged and carried units are never retried.
@@ -122,6 +125,31 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
     groupings = copy.deepcopy(base.get('groupings') or [])  # upper grouping (user-accepted option A), link only
     counts = {}  # (domain, subject) -> placed units in this run, for the one-home tie break
     rows = []
+
+    def commit(placement, held):
+        for kind in ('domain', 'subject'):
+            chosen = (placement.get(kind) or {}).get('chosen')
+            if not chosen or held and held['where'] == kind:
+                continue
+            catalog = domains if kind == 'domain' else subjects.setdefault(placement['domain']['chosen']['name'], [])
+            key = (lambda r: r.get('subject_id') == chosen.get('subject_id')) if kind == 'subject' else (lambda r: r['name'] == chosen['name'])
+            found = next((i for i, r in enumerate(catalog) if key(r)), None)
+            if found is None:
+                catalog.append(copy.deepcopy(chosen))
+            else:
+                catalog[found] = copy.deepcopy(chosen)
+        if not held and (placement.get('domain') or {}).get('chosen') and (placement.get('subject') or {}).get('chosen'):
+            key = (placement['domain']['chosen']['name'], placement['subject']['chosen']['name'])
+            counts[key] = counts.get(key, 0) + 1
+
+    def notify(index):
+        if on_row is None:
+            return
+        import inspect
+        if len(inspect.signature(on_row).parameters) >= 5:
+            on_row(index, rows[index], domains, subjects, groupings)
+        else:
+            on_row(index, rows[index], domains, subjects)
 
     def place_unit(row):
         unit = row['unit']; placement = {}
@@ -140,20 +168,7 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
                 placement[kind] = getattr(exc, 'trace', {}) or {}
                 held = {'where': kind, 'reason': str(exc)}
                 break
-        for kind in ('domain', 'subject'):
-            chosen = (placement.get(kind) or {}).get('chosen')
-            if not chosen or held and held['where'] == kind:
-                continue
-            catalog = domains if kind == 'domain' else subjects.setdefault(placement['domain']['chosen']['name'], [])
-            key = (lambda r: r.get('subject_id') == chosen.get('subject_id')) if kind == 'subject' else (lambda r: r['name'] == chosen['name'])
-            found = next((i for i, r in enumerate(catalog) if key(r)), None)
-            if found is None:
-                catalog.append(copy.deepcopy(chosen))
-            else:
-                catalog[found] = copy.deepcopy(chosen)
-        if not held and (placement.get('domain') or {}).get('chosen') and (placement.get('subject') or {}).get('chosen'):
-            key = (placement['domain']['chosen']['name'], placement['subject']['chosen']['name'])
-            counts[key] = counts.get(key, 0) + 1
+        commit(placement, held)
         grouping = None
         if upper_grouping:
             dtrace = placement.get('domain') or {}
@@ -174,14 +189,22 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
     for row in extract_report['rows']:
         unit = row['unit']
         reason = (skip_units or {}).get(unit['unit_id'])
+        saved = (resume_rows or {}).get(row['index'])
+        if saved and saved['row'].get('unit_id') == unit['unit_id'] and saved['row'].get('pass') != 2:
+            done = copy.deepcopy(saved['row'])
+            if 'trace' in done:
+                commit(done['trace'], done.get('held'))
+            if saved.get('groupings') is not None:
+                groupings[:] = copy.deepcopy(saved['groupings'])
+            rows.append(done)
+            continue
         if row['flags'] or reason:
             # Task382: a unit whose paid call is carried as uncertain is held without any new call (no resend).
             rows.append({'unit_id': unit['unit_id'], 'record_id': row['record_id'], 'index': row['index'],
                          'held': {'where': 'carried' if reason else 'extract', 'reason': reason or ','.join(row['flags'])}})
         else:
             rows.append(place_unit(row))
-        if on_row is not None:
-            on_row(len(rows) - 1, rows[-1], domains, subjects)
+        notify(len(rows) - 1)
     if second_pass:
         by_id = {r['unit']['unit_id']: r for r in extract_report['rows']}
         for i, done in enumerate(rows):
@@ -190,8 +213,7 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
             again = place_unit(by_id[done['unit_id']])
             again['pass'] = 2; again['first_hold'] = done['held']
             rows[i] = again
-            if on_row is not None:
-                on_row(i, rows[i], domains, subjects)
+            notify(i)
     report = _sealed({'version': VERSION, 'stage': 'place', 'snapshot': base['name'], 'snapshot_sha': base['sha'],
                       'extract_sha': extract_report['sha'], 'rows': rows, 'second_pass': bool(second_pass), **({'one_home': True} if one_home else {}),
                       'domains_after': domains, 'subjects_after': subjects,
