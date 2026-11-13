@@ -882,6 +882,8 @@ def _place_identity_legacy(kind, unit, domain, catalog, ports, k, document=None)
                     if again>=SHARED_COMPONENT_THRESHOLD:
                         raise PlacementHeld('E_DOMAIN_SHARED_COMPONENT: the domain name still names a consuming business',trace)
             if kind=='domain':
+                # Warrant (user option A1): the stage runner reuses this proposal when the same name recurs.
+                trace['proposal']={k:proposed.get(k) for k in ('name','description','source_concept')}
                 valid=score(ports,{'candidate':proposed,'unit':working},DOMAIN_QUESTION)
                 trace['domain_criterion']={'score':valid,'pass':valid>=.5}
             # Check every distinct top-5 candidate from BOTH searches before creation.
