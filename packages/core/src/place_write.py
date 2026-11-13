@@ -552,6 +552,16 @@ DOMAIN_COVERED_QUESTION = DOMAIN_CRITERION + (
     '예: 물류(배송·창고·출고) 안의 출고는 예, 인사 안의 재고는 아니오. 예/아니오 확률로 답한다.')
 
 
+_CODE_MARKS = re.compile(r'[`_./#:()\[\]<>]|[a-z][A-Z]|[A-Z]{2,}[a-z]|\d{3,}')
+
+
+def code_like(name):
+    """An identifier-shaped target (code symbol, file, route, number): backticks or code punctuation, camelCase/PascalCase
+    joints, or three or more digits. A plain word (User, patient, 병원) is not code-like (p2-onehome-2: the
+    deterministic one-home rule locked every D15 `User` unit into the first, wrong home)."""
+    return isinstance(name, str) and bool(_CODE_MARKS.search(name.strip()))
+
+
 def cross_domain_home(unit, domains, subjects, ports=None, *, counts=None):
     """One home per target at write time, deterministic (user "추천대로 진행해줘" after p2-onehome-1, where the Jev
     same-entity question rejected even identical codes and stood aside once a target lived in two domains).
@@ -560,6 +570,8 @@ def cross_domain_home(unit, domains, subjects, ports=None, *, counts=None):
     ties go to the earliest domain in catalog order. Known limit: a homonym (same name, different entity) joins the
     existing home. Returns {'domain': row, 'trace': {...}} or None when no subject matches."""
     target = unit['target_expression']
+    if not code_like(target):
+        return None  # user option A: the deterministic rule applies to code-like names only; plain words take normal placement
     hits = [(name, row) for name, rows in subjects.items() for row in rows
             if any(_norm(target) == _norm(n) for n in [row['name'], *row.get('aliases', [])])]
     order = {d['name']: i for i, d in enumerate(domains)}
