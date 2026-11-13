@@ -150,5 +150,35 @@ class Safety(unittest.TestCase):
             self.assertEqual(exc.exception.code, code, outcome)
 
 
+class ResumeRecords(unittest.TestCase):
+    """#24 runner defects: a resumed place run skips finished records, and groupings carry between records."""
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        for m in (patch.object(sr, 'STATE_HOME', root), patch.object(safety, 'INPUTS_HOME', root)):
+            m.start(); self.addCleanup(m.stop)
+        self.root = root
+
+    def test_finished_record_is_skipped_and_groupings_carry(self):
+        import stagewise as sw
+        out = self.root / 'out'; out.mkdir()
+        base = sw.snapshot('b', [{'name': '기존', 'description': '기존'}], {})
+        (self.root / 'base.json').write_text(json.dumps(base))
+        for rid in ('A', 'B'): (self.root / ('ex-%s.json' % rid)).write_text('{}')
+        done = {'sha': 'shaA', 'domains_after': base['domains'], 'subjects_after': {}, 'groupings_after': [{'name': 'g', 'description': 'd', 'members': ['기존', 'x']}]}
+        (out / 'stage2-place-A.json').write_text(json.dumps(done))
+        (out / 'accounting-live.json').write_text(json.dumps({'used': {'sdk': 0, 'jev_http': 0, 'embedding_post': 0, 'embedding_inputs': 0}, 'cash_usd': 0.0}))
+        seen = []
+        def run_place(ports, extract_report, base, **kw):
+            seen.append((base.get('groupings'), kw.get('resume_rows')))
+            return {'sha': 'shaB', 'domains_after': base['domains'], 'subjects_after': {}, 'groupings_after': base.get('groupings')}
+        p = plan(stage='place', resume=True, extracts={'A': str(self.root / 'ex-A.json'), 'B': str(self.root / 'ex-B.json')}, base=str(self.root / 'base.json'))
+        with patch.object(sw, 'run_place', run_place):
+            result = sr.run(p, dry=False, ports_factory=lambda b: None, broker=sr.Broker(p, dry=False), out_dir=out)
+        self.assertEqual(result['outcome'], 'completed', result); self.assertEqual(result['reports'], {'A': 'shaA', 'B': 'shaB'})
+        self.assertEqual(len(seen), 1)  # only B ran
+        self.assertEqual(seen[0][0][0]['name'], 'g'); self.assertEqual(seen[0][1], {})
+
+
 if __name__ == '__main__':
     unittest.main()
