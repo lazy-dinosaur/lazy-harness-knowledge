@@ -562,6 +562,30 @@ def code_like(name):
     return isinstance(name, str) and bool(_CODE_MARKS.search(name.strip()))
 
 
+def covering_domains(proposed, unit, catalog, ports, trace):
+    """Existing domains a new-domain proposal covers or largely overlaps (Task382/385/387/390), shared by normal creation
+    and the warrant step (user "그렇게하자 그러면" on B: a warrant-created domain must pass the same gates).
+    covered = overlap >= .5 or reverse containment >= .5 among suspects (overlap >= .3), minus domains that only USE the
+    proposal's shared feature (uses >= .7, recorded as context-map links). Fills the same trace keys as before."""
+    overlaps=score_many(ports,{'proposed':proposed,'unit':unit},
+        [{'name':o['name'],'description':o['description']} for o in catalog],DOMAIN_OVERLAP_QUESTION)
+    trace['domain_overlap_checks']=[{'candidate':o['name'],'score':v} for o,v in zip(catalog,overlaps)]
+    suspects=[(o,v) for o,v in zip(catalog,overlaps) if v>=.3]
+    covered=[]
+    if suspects:
+        reverse=score_many(ports,{'proposed':proposed,'unit':unit},
+            [{'name':o['name'],'description':o['description']} for o,_ in suspects],DOMAIN_UMBRELLA_QUESTION)
+        trace['domain_umbrella_checks']=[{'candidate':o['name'],'score':r} for (o,_),r in zip(suspects,reverse)]
+        covered=[(o,v) for (o,v),r in zip(suspects,reverse) if v>=.5 or r>=.5]
+    if covered:
+        uses=score_many(ports,{'proposed':proposed,'unit':unit},
+            [{'name':o['name'],'description':o['description']} for o,_ in covered],DOMAIN_USES_QUESTION)
+        trace['domain_uses_checks']=[{'candidate':o['name'],'score':u} for (o,_),u in zip(covered,uses)]
+        trace['context_map_uses']=[{'domain':o['name'],'uses':proposed.get('name'),'score':u} for (o,_),u in zip(covered,uses) if u>=.7]
+        covered=[(o,v) for (o,v),u in zip(covered,uses) if u<.7]
+    return covered
+
+
 def cross_domain_home(unit, domains, subjects, ports=None, *, counts=None):
     """One home per target at write time, deterministic (user "추천대로 진행해줘" after p2-onehome-1, where the Jev
     same-entity question rejected even identical codes and stood aside once a target lived in two domains).
@@ -918,25 +942,7 @@ def _place_identity_legacy(kind, unit, domain, catalog, ports, k, document=None)
                         raise PlacementHeld('new domain coverage is not clearly no (<0.3)',trace)
                 if not existing:
                     # Task382: no catch-all — the proposal must not contain or largely overlap ANY existing domain.
-                    overlaps=score_many(ports,{'proposed':proposed,'unit':working},
-                        [{'name':o['name'],'description':o['description']} for o in catalog],DOMAIN_OVERLAP_QUESTION)
-                    trace['domain_overlap_checks']=[{'candidate':o['name'],'score':v} for o,v in zip(catalog,overlaps)]
-                    suspects=[(o,v) for o,v in zip(catalog,overlaps) if v>=.3]
-                    covered=[]
-                    if suspects:
-                        # Task390: covered = strong overlap (>=.5) OR the whole existing scope sits inside the proposal (>=.5).
-                        reverse=score_many(ports,{'proposed':proposed,'unit':working},
-                            [{'name':o['name'],'description':o['description']} for o,_ in suspects],DOMAIN_UMBRELLA_QUESTION)
-                        trace['domain_umbrella_checks']=[{'candidate':o['name'],'score':r} for (o,_),r in zip(suspects,reverse)]
-                        covered=[(o,v) for (o,v),r in zip(suspects,reverse) if v>=.5 or r>=.5]
-                    if covered:
-                        # Task387: a candidate that only USES the proposal's shared feature (uses >= .7) is a context-map link,
-                        # not a covered domain; only the rest count as covered.
-                        uses=score_many(ports,{'proposed':proposed,'unit':working},
-                            [{'name':o['name'],'description':o['description']} for o,_ in covered],DOMAIN_USES_QUESTION)
-                        trace['domain_uses_checks']=[{'candidate':o['name'],'score':u} for (o,_),u in zip(covered,uses)]
-                        trace['context_map_uses']=[{'domain':o['name'],'uses':proposed.get('name'),'score':u} for (o,_),u in zip(covered,uses) if u>=.7]
-                        covered=[(o,v) for (o,v),u in zip(covered,uses) if u<.7]
+                    covered=covering_domains(proposed,working,catalog,ports,trace)
                     if covered:
                         # Task385 (user "추천대로 해보자"): the umbrella proposal becomes an UPPER grouping candidate (link only,
                         # existing domains stay below it); the unit goes to the covered child its owner entity belongs to.

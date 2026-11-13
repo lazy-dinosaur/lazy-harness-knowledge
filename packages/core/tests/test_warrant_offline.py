@@ -18,8 +18,12 @@ def extract(targets):
 BASE = sw.snapshot('base', [{'name': '온보딩', 'description': '서비스 시작'}], {})
 
 
-def ports():
-    return w.Ports(lambda n, p, t: {}, lambda xs: [[0., 1.]] * len(xs), lambda k, s, o: {x: 1. / len(o) for x in o}, lambda s, l, q: [.1])
+def ports(overlap=None):
+    def ask(state, labels, question):
+        if overlap and question == w.DOMAIN_OVERLAP_QUESTION and state['candidate']['name'] == overlap: return [.8]
+        if overlap and question == w.DOMAIN_UMBRELLA_QUESTION: return [.1]
+        return [.1]
+    return w.Ports(lambda n, p, t: {}, lambda xs: [[0., 1.]] * len(xs), lambda k, s, o: {x: 1. / len(o) for x in o}, ask)
 
 
 def placer(proposals):
@@ -32,7 +36,7 @@ def placer(proposals):
         name = proposals.get(unit['target_expression'])
         if name is None:
             return {'chosen': catalog[0], 'new': False}
-        raise w.PlacementHeld('new domain coverage is not clearly no (<0.3)', {'proposal': {'name': name, 'description': name + ' 업무', 'source_concept': name}})
+        raise w.PlacementHeld('new domain coverage is not clearly no (<0.3)', {'proposal': {'name': name, 'description': name + ' 업무', 'source_concept': name}, 'domain_criterion': {'score': .9, 'pass': name != '직함'}})
     return place, calls
 
 
@@ -59,6 +63,23 @@ class Warrant(unittest.TestCase):
         with patch.object(sw.w, 'place_identity', place):
             report = sw.run_place(ports(), extract(['전화번호', '직원']), BASE)
         self.assertTrue(all(r.get('held') for r in report['rows'])); self.assertNotIn('warrant', report)
+
+
+class WarrantGates(unittest.TestCase):
+    """B: a warrant-created domain passes the same overlap / no-catch-all gates as normal creation."""
+    def test_a_proposal_that_largely_overlaps_an_existing_domain_is_not_created(self):
+        place, _ = placer({'일정': '진료일정', '헤더': '진료일정'})
+        with patch.object(sw.w, 'place_identity', place):
+            report = sw.run_place(ports(overlap='온보딩'), extract(['일정', '헤더']), BASE, warrant=True)
+        self.assertTrue(all(r.get('held') for r in report['rows']))
+        self.assertEqual(report['rows'][1]['warrant']['blocked_by'], ['온보딩'])
+        self.assertNotIn('진료일정', [d['name'] for d in report['domains_after']])
+
+    def test_a_proposal_that_failed_the_business_area_criterion_does_not_count(self):
+        place, _ = placer({'일정': '직함', '헤더': '직함'})
+        with patch.object(sw.w, 'place_identity', place):
+            report = sw.run_place(ports(), extract(['일정', '헤더']), BASE, warrant=True)
+        self.assertTrue(all(r.get('held') and 'warrant' not in r for r in report['rows']))
 
 
 if __name__ == '__main__':

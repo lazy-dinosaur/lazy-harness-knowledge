@@ -146,25 +146,43 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
             counts[key] = counts.get(key, 0) + 1
 
     pending = {}  # normalized proposed domain name -> [row positions held in the coverage band]
+    blocked = {}  # normalized proposed domain name -> existing domains it covers or overlaps (warrant refused)
     by_index = {r['index']: r for r in extract_report['rows']}
 
     def maybe_warrant(pos):
         done = rows[pos]; held = done.get('held') or {}
         if held.get('where') != 'domain' or 'coverage is not clearly no' not in held.get('reason', ''):
             return
-        proposal = ((done.get('trace') or {}).get('domain') or {}).get('proposal') or {}
+        dtrace = (done.get('trace') or {}).get('domain') or {}
+        proposal = dtrace.get('proposal') or {}
         name = proposal.get('name')
         if not isinstance(name, str) or not name.strip() or any(w._norm(d['name']) == w._norm(name) for d in domains):
+            return
+        if not (dtrace.get('domain_criterion') or {}).get('pass'):
+            return  # only proposals that passed the business-area criterion count as warrant
+        if w._norm(name) in blocked:
+            done['warrant'] = {'name': name, 'blocked_by': blocked[w._norm(name)]}
             return
         members = pending.setdefault(w._norm(name), [])
         members.append(pos)
         if len(members) < 2:
             done['warrant'] = {'name': name, 'pending': 1}
             return
+        # B (user "그렇게하자 그러면"): the same no-catch-all / overlap gates as normal creation, checked once.
+        gate = {}
+        covered = w.covering_domains({'name': name.strip(), 'description': (proposal.get('description') or '').strip()},
+                                     by_index[done['index']]['unit'], domains, ports, gate)
+        if covered:
+            blocked[w._norm(name)] = [o['name'] for o, _ in covered]
+            for p in members:
+                rows[p]['warrant'] = {'name': name, 'blocked_by': blocked[w._norm(name)], 'gate': gate}
+                notify(p)
+            del pending[w._norm(name)]
+            return
         domain = {'name': name.strip(), 'description': (proposal.get('description') or '').strip(), 'aliases': [],
                   'source_concept': proposal.get('source_concept')}
         domain['vector'] = w.checked_vectors(ports.encode([w.identity_text('domain', domain)]), 1)[0]
-        info = {'name': domain['name'], 'members': [rows[p]['index'] for p in members]}
+        info = {'name': domain['name'], 'members': [rows[p]['index'] for p in members], 'gate': gate}
         for k, p in enumerate(list(members)):
             first_hold = rows[p].get('held')
             again = place_unit(by_index[rows[p]['index']], forced=(domain, k == 0, info))
