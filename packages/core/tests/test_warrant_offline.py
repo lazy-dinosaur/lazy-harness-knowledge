@@ -1,5 +1,7 @@
 """Warrant (user option A1): a new domain is created when a second unit proposes the same name; earlier holders join it."""
 import offline_guard  # noqa: F401
+import collections
+import copy
 import unittest
 from unittest.mock import patch
 
@@ -80,6 +82,39 @@ class WarrantGates(unittest.TestCase):
         with patch.object(sw.w, 'place_identity', place):
             report = sw.run_place(ports(), extract(['일정', '헤더']), BASE, warrant=True)
         self.assertTrue(all(r.get('held') and 'warrant' not in r for r in report['rows']))
+
+
+class WarrantPassesAndResume(unittest.TestCase):
+    """#24 gaps: the warrant counts second-pass holds and re-registers proposals of reused rows; a unit counts once."""
+    def _place(self, script):
+        seen = collections.Counter()
+        def place(kind, unit, domain, catalog, p, k, document=None):
+            if kind == 'subject':
+                return {'chosen': {'name': unit['target_expression'], 'subject_id': unit['unit_id']}, 'new': True}
+            seen[unit['unit_id']] += 1
+            name = script[unit['unit_id']][min(seen[unit['unit_id']], len(script[unit['unit_id']])) - 1]
+            raise w.PlacementHeld('new domain coverage is not clearly no (<0.3)', {'proposal': {'name': name, 'description': name + ' 업무', 'source_concept': name}, 'domain_criterion': {'score': .9, 'pass': True}})
+        return place
+
+    def test_second_pass_hold_counts_toward_the_warrant(self):
+        place = self._place({'u0': ['계정'], 'u1': ['인사', '계정']})
+        with patch.object(sw.w, 'place_identity', place):
+            report = sw.run_place(ports(), extract(['가', '나']), BASE, warrant=True, second_pass=True)
+        self.assertEqual([r['domain']['chosen'] for r in report['rows']], ['계정', '계정'])
+
+    def test_one_unit_held_twice_is_not_two_proposals(self):
+        place = self._place({'u0': ['계정'], 'u1': ['인사']})
+        with patch.object(sw.w, 'place_identity', place):
+            report = sw.run_place(ports(), extract(['가', '나']), BASE, warrant=True, second_pass=True)
+        self.assertTrue(all(r.get('held') for r in report['rows']))
+
+    def test_resumed_row_proposal_is_re_registered(self):
+        place = self._place({'u0': ['계정'], 'u1': ['계정']})
+        saved = {}
+        with patch.object(sw.w, 'place_identity', place):
+            sw.run_place(ports(), extract(['가']), BASE, on_row=lambda i, row, d, s, g: saved.__setitem__(i, {'row': copy.deepcopy(row), 'groupings': g}))
+            report = sw.run_place(ports(), extract(['가', '나']), BASE, warrant=True, resume_rows={0: saved[0]})
+        self.assertEqual([r['domain']['chosen'] for r in report['rows']], ['계정', '계정'])
 
 
 if __name__ == '__main__':

@@ -163,6 +163,9 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
         if w._norm(name) in blocked:
             done['warrant'] = {'name': name, 'blocked_by': blocked[w._norm(name)]}
             return
+        for other in pending.values():  # a unit counts once, under its latest proposal
+            if pos in other:
+                other.remove(pos)
         members = pending.setdefault(w._norm(name), [])
         members.append(pos)
         if len(members) < 2:
@@ -250,6 +253,8 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
             if saved.get('groupings') is not None:
                 groupings[:] = copy.deepcopy(saved['groupings'])
             rows.append(done)
+            if warrant:
+                maybe_warrant(len(rows) - 1)  # re-register a reused row's pending proposal (#24 gap)
             continue
         if row['flags'] or reason:
             # Task382: a unit whose paid call is carried as uncertain is held without any new call (no resend).
@@ -268,6 +273,8 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
             again = place_unit(by_id[done['unit_id']])
             again['pass'] = 2; again['first_hold'] = done['held']
             rows[i] = again
+            if warrant:
+                maybe_warrant(i)  # the warrant also counts second-pass holds (#24 gap)
             notify(i)
     report = _sealed({'version': VERSION, 'stage': 'place', 'snapshot': base['name'], 'snapshot_sha': base['sha'],
                       'extract_sha': extract_report['sha'], 'rows': rows, 'second_pass': bool(second_pass), **({'one_home': True} if one_home else {}), **({'warrant': True} if warrant else {}),
