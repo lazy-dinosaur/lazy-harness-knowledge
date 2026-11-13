@@ -552,28 +552,30 @@ DOMAIN_COVERED_QUESTION = DOMAIN_CRITERION + (
     '예: 물류(배송·창고·출고) 안의 출고는 예, 인사 안의 재고는 아니오. 예/아니오 확률로 답한다.')
 
 
-def cross_domain_home(unit, domains, subjects, ports, *, threshold=.7):
-    """One home per target at write time (user direction "저장할 때마다 규칙", p2-domain-place-1: `사용자` split
-    계정/고객). If a subject with the unit's exact target name/alias already lives in exactly one domain, ask once whether
-    it is the same entity (SAME_QUESTION >= threshold) and, if so, return that domain as the unit's home. Homonyms
-    (same name, different entity) stay on the normal path. Returns {'domain': row|None, 'trace': {...}} or None."""
+def cross_domain_home(unit, domains, subjects, ports=None, *, counts=None):
+    """One home per target at write time, deterministic (user "추천대로 진행해줘" after p2-onehome-1, where the Jev
+    same-entity question rejected even identical codes and stood aside once a target lived in two domains).
+    An exact target name/alias match to an existing subject IS the same target: no judgement call. If the target already
+    lives in several domains, the home is the one holding the most placed units for it (`counts`: {(domain, subject): n});
+    ties go to the earliest domain in catalog order. Known limit: a homonym (same name, different entity) joins the
+    existing home. Returns {'domain': row, 'trace': {...}} or None when no subject matches."""
     target = unit['target_expression']
     hits = [(name, row) for name, rows in subjects.items() for row in rows
             if any(_norm(target) == _norm(n) for n in [row['name'], *row.get('aliases', [])])]
+    order = {d['name']: i for i, d in enumerate(domains)}
+    hits = [(name, row) for name, row in hits if name in order]
     if not hits:
         return None
-    trace = {'target': target, 'hits': [{'domain': d, 'subject': r['name']} for d, r in hits]}
-    if len({d for d, _ in hits}) > 1:
-        trace['reason'] = 'target already in several domains; normal placement'
-        return {'domain': None, 'trace': trace}
-    name, row = hits[0]
-    domain = next((d for d in domains if d['name'] == name), None)
-    if domain is None:
-        return None
-    same = score(ports, {'candidate': {'name': row['name'], 'description': row.get('description', '')},
-                         'proposed': {'name': target, 'description': unit['content']}, 'unit': unit, 'domain': domain}, SAME_QUESTION)
-    trace.update(domain=name, subject=row['name'], same=same, home=same >= threshold)
-    return {'domain': domain if same >= threshold else None, 'trace': trace}
+    counts = counts or {}
+    trace = {'target': target, 'rule': 'exact-name', 'hits': [{'domain': d, 'subject': r['name'], 'units': counts.get((d, r['name']), 0)} for d, r in hits]}
+    names = {d for d, _ in hits}
+    if len(names) == 1:
+        name, row = hits[0]; trace['chosen_by'] = 'only-home'
+    else:
+        name, row = max(hits, key=lambda h: (counts.get((h[0], h[1]['name']), 0), -order[h[0]]))
+        trace['chosen_by'] = 'most-units'
+    trace.update(domain=name, subject=row['name'], home=True)
+    return {'domain': next(d for d in domains if d['name'] == name), 'trace': trace}
 
 
 def exact_identity(expression, catalog, trace):
