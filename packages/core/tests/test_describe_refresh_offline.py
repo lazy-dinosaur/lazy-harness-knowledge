@@ -71,5 +71,27 @@ class DescribeRefresh(unittest.TestCase):
         self.assertEqual(calls, []); self.assertNotIn('description_events', report)
 
 
+class DescriptionShape(unittest.TestCase):
+    def test_rule_summary_with_evidence_note_is_rejected(self):
+        p, _ = ports()
+        p = w.Ports(p.model, p.encode, p.choose, p.ask, worker=lambda role, packet: {'description': '계정은 번호 이력을 보존한다. 근거: src/user.ts'})
+        with patch.object(sw.w, 'place_identity', place()):
+            report = sw.run_place(p, extract(3), BASE, refresh_descriptions=True)
+        self.assertTrue(all(not e['accepted'] and 'evidence' in e['reason'] for e in report['description_events']))
+        self.assertEqual(next(d for d in report['domains_after'] if d['name'] == '계정')['description'], '처음 설명')
+
+    def test_long_domain_description_is_rejected(self):
+        p, _ = ports()
+        p = w.Ports(p.model, p.encode, p.choose, p.ask, worker=lambda role, packet: {'description': '가' * 250})
+        with patch.object(sw.w, 'place_identity', place()):
+            report = sw.run_place(p, extract(3), BASE, refresh_descriptions=True)
+        dom = [e for e in report['description_events'] if e['kind'] == 'domain'][0]
+        self.assertFalse(dom['accepted']); self.assertIn('200', dom['reason'])
+
+    def test_prompt_asks_for_scope_only(self):
+        import active_worker as aw
+        self.assertIn('범위', aw.PROMPTS['describe']); self.assertEqual(aw.PROMPT_VERSION, 'active-worker-prompt/13')
+
+
 if __name__ == '__main__':
     unittest.main()
