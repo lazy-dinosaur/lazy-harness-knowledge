@@ -9,6 +9,7 @@ the user passed are promoted into the next named snapshot. Nothing here calls a 
 supplies ports (offline fakes in tests, broker-accounted production ports for a separately approved live stage).
 """
 import copy
+from dataclasses import replace
 from pathlib import Path
 from uuid import uuid5, NAMESPACE_URL
 
@@ -310,6 +311,7 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
         text = extract_report['sources'][row['record_id']]
         held = None
         home = w.cross_domain_home(unit, domains, subjects, ports, counts=counts) if one_home and not forced else None
+        uports = replace(ports, reserved_names=frozenset(g['name'] for g in groupings)) if groupings else ports
         for kind in ('domain', 'subject'):
             if kind == 'domain' and forced:
                 # warrant: the domain created from repeated proposals; only the subject step runs
@@ -321,7 +323,7 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
                 continue
             catalog = domains if kind == 'domain' else subjects.get(placement['domain']['chosen']['name'], [])
             try:
-                placement[kind] = w.place_identity(kind, unit, placement.get('domain', {}).get('chosen'), catalog, ports, top_k, document=text)
+                placement[kind] = w.place_identity(kind, unit, placement.get('domain', {}).get('chosen'), catalog, uports, top_k, document=text)
             except ValueError as exc:
                 placement[kind] = getattr(exc, 'trace', {}) or {}
                 held = {'where': kind, 'reason': str(exc)}

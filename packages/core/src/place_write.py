@@ -72,6 +72,7 @@ class Ports:
     batch_questions: int = 0
     area_naming_context: bool = True  # Task363-N, default on (#20): catalog_names + one same-language re-ask, then hold
     shared_component_check: bool = False  # S003 review A: on in production(); hand-built ports opt in
+    reserved_names: frozenset = frozenset()  # names a new domain may not take (upper-grouping names; p2-domain-place-4 defect)
 
 
 def model_view(value):
@@ -917,6 +918,8 @@ def _place_identity_legacy(kind, unit, domain, catalog, ports, k, document=None)
                 trace['same_meaning_checks'].append({'candidate':other['name'],'score':same,'same':same>=.7})
                 if same>=.7:
                     existing=other; break
+            if kind=='domain' and _norm(name) in {_norm(n) for n in (getattr(ports,'reserved_names',None) or ())}:
+                raise PlacementHeld('E_NAME_TAKEN: the proposed domain name is an upper-grouping name',trace)
             named_hit=exact_identity(name,catalog,trace)
             if named_hit:
                 existing=named_hit
