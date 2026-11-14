@@ -103,7 +103,7 @@ def run_extract(ports, records, *, host, out=None):
 # ---------------------------------------------------------------- stages 2-3: domain and subject placement
 
 def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, skip_units=None, second_pass=False, upper_grouping=False,
-              one_home=False, resume_rows=None, warrant=False, refresh_descriptions=False):
+              one_home=False, resume_rows=None, warrant=False, refresh_descriptions=False, co_grouping=False):
     """Stages 2 (domain) and 3 (subject) from a user-passed extract report and a named snapshot.
 
     Mirrors place_write.run: domain first, then subject inside the chosen domain; successful choices update the
@@ -113,6 +113,8 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
     resume_rows ({index: {'row': saved_row, 'groupings': [...]}}, #24 runner defect): first-pass rows saved by an earlier
     stopped run are reused without any new call; their catalog effects (domains, subjects, counts) are replayed in order
     and the groupings saved with the last reused row are restored. Second-pass rows are not reused.
+    co_grouping (user idea, accepted): with upper_grouping on, the existing domains a unit's domain search returned
+    together are judged pairwise in the same save, once per pair, and a pair that belongs together becomes a grouping.
     refresh_descriptions (user requirement "업데이트 및 관리가 되야하는거잔아", option A): at save time, a domain or subject created
     in this run gets its description rewritten by the `describe` worker from what has accumulated in it, first at 3 units
     and then each time its unit count doubles; a grouping is rewritten when a domain attaches. Guards: 1..300 chars,
@@ -138,6 +140,7 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
     members = {}             # same keys -> placed units (newest last)
     refreshed = {}           # same keys -> unit count at the last rewrite
     description_events = []
+    pair_cache = {}  # frozenset(domain pair) -> co-retrieval grouping score (judged once per run)
 
     def _units_row(units):
         return [('unit:' + u['unit_id'], u['content'][:500], {'source_ranges': u.get('source_ranges') or []}) for u in units[-12:]]
@@ -328,6 +331,13 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
                 grouping = ug.from_umbrella(dtrace['umbrella_candidate'], groupings, domains, ports)
             if refresh_descriptions and grouping and grouping.get('action') == 'attached' and grouping.get('group'):
                 refresh_group(grouping['group'])
+            if co_grouping:
+                names = []
+                for search in (placement.get('domain') or {}).get('searches') or []:
+                    names += [c.get('name') for c in search.get('candidates') or [] if isinstance(c, dict)]
+                co_events = ug.judge_co_retrieved(names, groupings, domains, ports, pair_cache)
+                if co_events:
+                    grouping = dict(grouping or {}, co_retrieval=co_events)
         out_row = {'unit_id': unit['unit_id'], 'record_id': row['record_id'], 'index': row['index'],
                    'content': unit['content'], 'target_expression': unit['target_expression'],
                    'domain': summary(placement.get('domain')), 'subject': summary(placement.get('subject')),
