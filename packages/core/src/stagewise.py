@@ -103,7 +103,7 @@ def run_extract(ports, records, *, host, out=None):
 # ---------------------------------------------------------------- stages 2-3: domain and subject placement
 
 def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, skip_units=None, second_pass=False, upper_grouping=False,
-              one_home=False, resume_rows=None, warrant=False):
+              one_home=False, resume_rows=None, warrant=False, refresh_descriptions=False):
     """Stages 2 (domain) and 3 (subject) from a user-passed extract report and a named snapshot.
 
     Mirrors place_write.run: domain first, then subject inside the chosen domain; successful choices update the
@@ -113,6 +113,11 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
     resume_rows ({index: {'row': saved_row, 'groupings': [...]}}, #24 runner defect): first-pass rows saved by an earlier
     stopped run are reused without any new call; their catalog effects (domains, subjects, counts) are replayed in order
     and the groupings saved with the last reused row are restored. Second-pass rows are not reused.
+    refresh_descriptions (user requirement "업데이트 및 관리가 되야하는거잔아", option A): at save time, a domain or subject created
+    in this run gets its description rewritten by the `describe` worker from what has accumulated in it, first at 3 units
+    and then each time its unit count doubles; a grouping is rewritten when a domain attaches. Guards: 1..300 chars,
+    a domain description must not cover/overlap other domains (same gate as creation), history kept, vector re-embedded.
+    Domains/subjects from the base snapshot keep their (user-confirmed) descriptions. Past placements are not revisited.
     warrant (user option A1, "추천대로 가봐 그러면"): a unit held only because an existing domain partly covers its new-domain
     proposal (coverage .3-.7) records that proposal; when a second unit proposes the same name (exact, normalized), the
     domain is created at that save and every unit that proposed it is placed into it in the same step (no later job).
@@ -128,6 +133,94 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
     groupings = copy.deepcopy(base.get('groupings') or [])  # upper grouping (user-accepted option A), link only
     counts = {}  # (domain, subject) -> placed units in this run, for the one-home tie break
     rows = []
+
+    created = set()          # ('d', domain) / ('s', domain, subject_id) created in this run: refreshable
+    members = {}             # same keys -> placed units (newest last)
+    refreshed = {}           # same keys -> unit count at the last rewrite
+    description_events = []
+
+    def _units_row(units):
+        return [('unit:' + u['unit_id'], u['content'][:500], {'source_ranges': u.get('source_ranges') or []}) for u in units[-12:]]
+
+    def _rewrite(packet):
+        try:
+            out = w.role_call(ports, 'describe', 'describe-' + w.digest(packet)[:24], packet, 'describe')
+        except ValueError as exc:
+            return None, 'describe failed: ' + str(exc)[:120]
+        new = (out or {}).get('description')
+        if not isinstance(new, str) or not new.strip() or len(new.strip()) > 300:
+            return None, 'description must be 1..300 chars'
+        return new.strip(), None
+
+    def _due(key):
+        n = len(members.get(key, [])); last = refreshed.get(key, 0)
+        return n >= 3 and (last == 0 or n >= 2 * last)
+
+    def refresh_domain(name):
+        key = ('d', name); row = next(d for d in domains if d['name'] == name); units = members[key]
+        packet = {'domain': name, 'name': name, 'subject_type': 'domain', 'description': row.get('description', ''),
+                  'subjects': [{'name': r['name'], 'description': r.get('description', '')} for r in subjects.get(name, [])][:20],
+                  'fragments': _units_row(units)}
+        new, reason = _rewrite(packet)
+        if new and reason is None:
+            others = [d for d in domains if d['name'] != name]
+            gate = {}
+            covered = w.covering_domains({'name': name, 'description': new}, units[-1], others, ports, gate) if others else []
+            if covered:
+                reason = 'new description covers ' + ', '.join(o['name'] for o, _ in covered)
+        description_events.append({'kind': 'domain', 'name': name, 'at_units': len(units), 'old': row.get('description'),
+                                   'new': new, 'accepted': reason is None, 'reason': reason})
+        if reason is None:
+            row.setdefault('description_history', []).append({'description': row.get('description'), 'until_units': len(units)})
+            row['description'] = new
+            row['vector'] = w.checked_vectors(ports.encode([w.identity_text('domain', row)]), 1)[0]
+        refreshed[key] = len(units)
+
+    def refresh_subject(dname, sid):
+        key = ('s', dname, sid)
+        row = next((r for r in subjects.get(dname, []) if (r.get('subject_id') or r['name']) == sid), None)
+        if row is None:
+            return
+        packet = {'domain': dname, 'name': row['name'], 'subject_type': row.get('subject_type') or 'entity',
+                  'description': row.get('description', ''), 'fragments': _units_row(members[key])}
+        new, reason = _rewrite(packet)
+        description_events.append({'kind': 'subject', 'domain': dname, 'name': row['name'], 'at_units': len(members[key]),
+                                   'old': row.get('description'), 'new': new, 'accepted': reason is None, 'reason': reason})
+        if reason is None:
+            row.setdefault('description_history', []).append({'description': row.get('description'), 'until_units': len(members[key])})
+            row['description'] = new
+            row['vector'] = w.checked_vectors(ports.encode([w.identity_text('subject', row)]), 1)[0]
+        refreshed[key] = len(members[key])
+
+    def refresh_group(gname):
+        group = next((g for g in groupings if g['name'] == gname), None)
+        if group is None:
+            return
+        packet = {'name': gname, 'subject_type': 'grouping', 'description': group.get('description', ''),
+                  'domains': [{'name': d['name'], 'description': d.get('description', '')} for d in domains if d['name'] in group['members']]}
+        new, reason = _rewrite(packet)
+        description_events.append({'kind': 'grouping', 'name': gname, 'members': list(group['members']), 'old': group.get('description'),
+                                   'new': new, 'accepted': reason is None, 'reason': reason})
+        if reason is None:
+            group.setdefault('description_history', []).append({'description': group.get('description'), 'members': len(group['members']) - 1})
+            group['description'] = new
+            group['vector'] = w.checked_vectors(ports.encode([w.identity_text('domain', group)]), 1)[0]
+
+    def track(placement, held, unit, live):
+        if held or not refresh_descriptions:
+            return
+        d = (placement.get('domain') or {}); s = (placement.get('subject') or {})
+        if not d.get('chosen') or not s.get('chosen'):
+            return
+        dname = d['chosen']['name']; sid = s['chosen'].get('subject_id') or s['chosen']['name']
+        if d.get('new'):
+            created.add(('d', dname))
+        if s.get('new'):
+            created.add(('s', dname, sid))
+        for key in (('d', dname), ('s', dname, sid)):
+            members.setdefault(key, []).append(unit)
+            if live and key in created and _due(key):
+                refresh_domain(dname) if key[0] == 'd' else refresh_subject(dname, sid)
 
     def commit(placement, held):
         for kind in ('domain', 'subject'):
@@ -225,6 +318,7 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
                 held = {'where': kind, 'reason': str(exc)}
                 break
         commit(placement, held)
+        track(placement, held, unit, live=True)
         grouping = None
         if upper_grouping:
             dtrace = placement.get('domain') or {}
@@ -232,6 +326,8 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
                 grouping = ug.attach_new_domain(dtrace['chosen'], groupings, domains, ports)
             elif dtrace.get('umbrella_candidate'):
                 grouping = ug.from_umbrella(dtrace['umbrella_candidate'], groupings, domains, ports)
+            if refresh_descriptions and grouping and grouping.get('action') == 'attached' and grouping.get('group'):
+                refresh_group(grouping['group'])
         out_row = {'unit_id': unit['unit_id'], 'record_id': row['record_id'], 'index': row['index'],
                    'content': unit['content'], 'target_expression': unit['target_expression'],
                    'domain': summary(placement.get('domain')), 'subject': summary(placement.get('subject')),
@@ -252,6 +348,8 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
                 commit(done['trace'], done.get('held'))
             if saved.get('groupings') is not None:
                 groupings[:] = copy.deepcopy(saved['groupings'])
+            if 'trace' in done:
+                track(done['trace'], done.get('held'), by_index[row['index']]['unit'], live=False)
             rows.append(done)
             if warrant:
                 maybe_warrant(len(rows) - 1)  # re-register a reused row's pending proposal (#24 gap)
@@ -277,7 +375,7 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
                 maybe_warrant(i)  # the warrant also counts second-pass holds (#24 gap)
             notify(i)
     report = _sealed({'version': VERSION, 'stage': 'place', 'snapshot': base['name'], 'snapshot_sha': base['sha'],
-                      'extract_sha': extract_report['sha'], 'rows': rows, 'second_pass': bool(second_pass), **({'one_home': True} if one_home else {}), **({'warrant': True} if warrant else {}),
+                      'extract_sha': extract_report['sha'], 'rows': rows, 'second_pass': bool(second_pass), **({'one_home': True} if one_home else {}), **({'warrant': True} if warrant else {}), **({'description_events': description_events} if refresh_descriptions else {}),
                       'domains_after': domains, 'subjects_after': subjects,
                       # Task385: upper-grouping candidates (link layer; never a same-level domain, never a copy of knowledge)
                       'umbrella_candidates': [dict(r['domain']['umbrella'], unit_id=r['unit_id']) for r in rows if r.get('domain') and r['domain'].get('umbrella')],
