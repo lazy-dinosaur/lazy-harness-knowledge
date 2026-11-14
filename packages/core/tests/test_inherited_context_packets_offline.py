@@ -21,7 +21,7 @@ class InheritedContextPackets(unittest.TestCase):
     def test_naming_roles_explain_the_field(self):
         for role in ('reextract', 'domain-name', 'subject-name'):
             self.assertIn('unit.inherited_context', aw.PROMPTS[role], role)
-        self.assertEqual(aw.PROMPT_VERSION, 'active-worker-prompt/12')
+        self.assertEqual(aw.PROMPT_VERSION, 'active-worker-prompt/13')
 
     def test_malformed_introducer_is_refused(self):
         with self.assertRaises(aw.WorkerFailure):

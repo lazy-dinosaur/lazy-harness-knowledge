@@ -153,7 +153,13 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
         new = (out or {}).get('description')
         if not isinstance(new, str) or not new.strip() or len(new.strip()) > 300:
             return None, 'description must be 1..300 chars'
-        return new.strip(), None
+        new = new.strip()
+        # scope, not a rule summary (p2-domain-place-3 review): 1-2 lines, no evidence notes; domains/groupings <= 200 chars
+        if not 1 <= len(new.splitlines()) <= 2 or '근거:' in new or '근거 :' in new:
+            return None, 'description must be a 1-2 line scope without evidence notes'
+        if packet.get('subject_type') in ('domain', 'grouping') and len(new) > 200:
+            return None, 'domain/grouping description must be <= 200 chars'
+        return new, None
 
     def _due(key):
         n = len(members.get(key, [])); last = refreshed.get(key, 0)
