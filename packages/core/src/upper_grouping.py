@@ -138,3 +138,43 @@ def from_umbrella(umbrella, groupings, catalog, ports=None):
     groupings.append(group)
     event.update(action='created', group=group['name'], members=list(free))
     return event
+
+
+def judge_co_retrieved(names, groupings, catalog, ports, cache, *, threshold=THRESHOLD, limit=3):
+    """Co-retrieval grouping (user idea "소화 하면서 벡터로 후보를 부를수 있으니 그때 판단", accepted): the domains a unit's
+    vector search brought up together are judged pairwise in the same save, once per pair (`cache`: frozenset -> score).
+    Only ungrouped existing domains are paired; a pair >= threshold becomes a grouping of two (the `group-name` worker
+    names it, the usual code checks apply). Fills the gap that existing domains were never compared, without a batch."""
+    by_name = {d['name']: d for d in catalog}
+    grouped = _grouped(groupings)
+    picked = []
+    for n in names:
+        if n in by_name and n not in grouped and n not in picked:
+            picked.append(n)
+        if len(picked) >= limit:
+            break
+    events = []
+    for i, a in enumerate(picked):
+        for b in picked[i + 1:]:
+            key = frozenset((a, b))
+            if key in cache or a in _grouped(groupings) or b in _grouped(groupings):
+                continue
+            score = w.score_many(ports, {'proposed': _row(by_name[a])}, [_row(by_name[b])], PAIR_QUESTION)[0]
+            cache[key] = score
+            event = {'pair': [a, b], 'score': score, 'action': 'none'}
+            if score >= threshold:
+                members = [by_name[a], by_name[b]]
+                packet = {'domains': [_row(d) for d in members], 'existing_groups': [g['name'] for g in groupings]}
+                try:
+                    named = w.role_call(ports, 'group-name', 'group-' + w.digest(packet)[:24], packet, 'group-name')
+                except ValueError as exc:
+                    event.update(action='naming-failed', reason=str(exc)); events.append(event); continue
+                error = name_error(named, groupings, catalog)
+                if error:
+                    event.update(action='naming-rejected', reason=error, proposal=named); events.append(event); continue
+                group = {'name': named['name'].strip(), 'description': named['description'].strip(), 'members': [a, b], 'origin': 'co-retrieval'}
+                group['vector'] = _vector(ports, group)
+                groupings.append(group)
+                event.update(action='created', group=group['name'])
+            events.append(event)
+    return events

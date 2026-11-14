@@ -214,7 +214,7 @@ def run(plan, *, dry, ports_factory, out_dir=None, broker=None):
                         resume_rows = {}
                         for f in sorted(out.glob('stage2-row-%s-*.json' % rid)):
                             saved = load(f); resume_rows[saved['row']['index']] = saved
-                    report = sw.run_place(ports, load(Path(path)), base, second_pass=bool(plan.get('second_pass')), upper_grouping=bool(plan.get('upper_grouping')), one_home=bool(plan.get('one_home')), warrant=bool(plan.get('warrant')), refresh_descriptions=bool(plan.get('refresh_descriptions')),
+                    report = sw.run_place(ports, load(Path(path)), base, second_pass=bool(plan.get('second_pass')), upper_grouping=bool(plan.get('upper_grouping')), one_home=bool(plan.get('one_home')), warrant=bool(plan.get('warrant')), refresh_descriptions=bool(plan.get('refresh_descriptions')), co_grouping=bool(plan.get('co_grouping')),
                                           resume_rows=resume_rows,
                                           on_row=lambda i, row, d, s, g, rid=rid: save(out / ('stage2-row-%s-%03d.json' % (rid, i)), {'row': row, 'domains': [x['name'] for x in d], 'groupings': g}))
                     save(done, report)
