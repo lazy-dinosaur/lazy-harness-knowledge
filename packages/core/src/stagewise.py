@@ -135,6 +135,9 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
     subjects = copy.deepcopy(base['subjects'])
     groupings = copy.deepcopy(base.get('groupings') or [])  # upper grouping (user-accepted option A), link only
     counts = {}  # (domain, subject) -> placed units in this run, for the one-home tie break
+    # user option A after p2-warm-2: subjects of a user-approved base are exact-name homes for plain words too
+    approved_homes = ({(d, s.get('subject_id', s['name'])) for d, rows_ in base['subjects'].items() for s in rows_}
+                      if base.get('approval') else None)
     rows = []
 
     created = set()          # ('d', domain) / ('s', domain, subject_id) created in this run: refreshable
@@ -310,7 +313,7 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
         unit = row['unit']; placement = {}
         text = extract_report['sources'][row['record_id']]
         held = None
-        home = w.cross_domain_home(unit, domains, subjects, ports, counts=counts) if one_home and not forced else None
+        home = w.cross_domain_home(unit, domains, subjects, ports, counts=counts, approved=approved_homes) if one_home and not forced else None
         uports = replace(ports, reserved_names=frozenset(g['name'] for g in groupings)) if groupings else ports
         for kind in ('domain', 'subject'):
             if kind == 'domain' and forced:
