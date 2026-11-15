@@ -38,7 +38,7 @@ def _need(cond, message):
 
 # ---------------------------------------------------------------- snapshots
 
-def snapshot(name, domains, subjects, *, parent=None, approval=None, db_dump=None, groupings=None):
+def snapshot(name, domains, subjects, *, parent=None, approval=None, db_dump=None, groupings=None, approved_homes=None):
     """A named carry-over state. `subjects` maps domain name -> subject rows (subject_id/name/description/aliases)."""
     _need(isinstance(name, str) and name, 'snapshot name required')
     _need(all(isinstance(d, dict) and d.get('name') and 'description' in d for d in domains), 'domain rows need name/description')
@@ -47,8 +47,21 @@ def snapshot(name, domains, subjects, *, parent=None, approval=None, db_dump=Non
              'subjects': {k: copy.deepcopy(v) for k, v in sorted(subjects.items())}}
     if groupings is not None:  # upper-grouping links (link only); absent in older snapshots
         value['groupings'] = copy.deepcopy(groupings)
+    if approved_homes is not None:  # (domain, subject_id) of the user-approved root catalog, carried through in-run snapshots
+        value['approved_homes'] = sorted([list(x) for x in approved_homes])
     value['sha'] = digest({k: v for k, v in value.items() if k != 'sha'})
     return value
+
+
+def approved_homes_of(base):
+    """(domain, subject_id) pairs a plain word may take by exact name (PR #45): the carried root set when present,
+    otherwise the subjects of a user-approved snapshot, otherwise None. In-run snapshots carry the ROOT set only, so a
+    subject created during a run never becomes an approved home (p2-warm-4 defect: the in-run snapshot dropped the set)."""
+    if base.get('approved_homes') is not None:
+        return {tuple(x) for x in base['approved_homes']}
+    if base.get('approval'):
+        return {(d, s.get('subject_id', s['name'])) for d, rows_ in base['subjects'].items() for s in rows_}
+    return None
 
 
 def _checked_snapshot(value):
@@ -136,8 +149,7 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
     groupings = copy.deepcopy(base.get('groupings') or [])  # upper grouping (user-accepted option A), link only
     counts = {}  # (domain, subject) -> placed units in this run, for the one-home tie break
     # user option A after p2-warm-2: subjects of a user-approved base are exact-name homes for plain words too
-    approved_homes = ({(d, s.get('subject_id', s['name'])) for d, rows_ in base['subjects'].items() for s in rows_}
-                      if base.get('approval') else None)
+    approved_homes = approved_homes_of(base)
     rows = []
 
     created = set()          # ('d', domain) / ('s', domain, subject_id) created in this run: refreshable
