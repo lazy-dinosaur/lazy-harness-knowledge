@@ -202,6 +202,7 @@ def run(plan, *, dry, ports_factory, out_dir=None, broker=None):
                 save(out / ('stage1-extract-%s.json' % rec['record_id']), report); reports[rec['record_id']] = report['sha']
         else:
             base = load(Path(plan['base']))
+            root_homes = sw.approved_homes_of(base)  # carried unchanged through the in-run snapshots (p2-warm-4 defect)
             resuming = bool(plan.get('resume')) and not dry
             for rid, path in plan['extracts'].items():
                 done = out / ('stage2-place-%s.json' % rid)
@@ -221,7 +222,7 @@ def run(plan, *, dry, ports_factory, out_dir=None, broker=None):
                 reports[rid] = report['sha']
                 # #24 runner defect: upper groupings carry from one record to the next within a run.
                 base = sw.snapshot('in-run-after-' + rid, report['domains_after'], report['subjects_after'], parent=base['name'], db_dump=base.get('db_dump'),
-                                   groupings=report.get('groupings_after', base.get('groupings')))
+                                   groupings=report.get('groupings_after', base.get('groupings')), approved_homes=root_homes)
     except Stop as exc:
         outcome = str(exc)
     finally:
