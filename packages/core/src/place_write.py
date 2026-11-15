@@ -587,24 +587,30 @@ def covering_domains(proposed, unit, catalog, ports, trace):
     return covered
 
 
-def cross_domain_home(unit, domains, subjects, ports=None, *, counts=None):
+def cross_domain_home(unit, domains, subjects, ports=None, *, counts=None, approved=None):
     """One home per target at write time, deterministic (user "추천대로 진행해줘" after p2-onehome-1, where the Jev
     same-entity question rejected even identical codes and stood aside once a target lived in two domains).
     An exact target name/alias match to an existing subject IS the same target: no judgement call. If the target already
     lives in several domains, the home is the one holding the most placed units for it (`counts`: {(domain, subject): n});
     ties go to the earliest domain in catalog order. Known limit: a homonym (same name, different entity) joins the
-    existing home. Returns {'domain': row, 'trace': {...}} or None when no subject matches."""
+    existing home. Returns {'domain': row, 'trace': {...}} or None when no subject matches.
+    `approved` (user option A after p2-warm-2): a set of (domain, subject_id) from a USER-APPROVED base catalog; a plain
+    word also takes the exact-name home when the matching subject is one of those (the p2-onehome-2 failure was a plain
+    word locked into an automatically created first home; an approved home is not that). In-run subjects stay code-like only."""
     target = unit['target_expression']
-    if not code_like(target):
+    plain = not code_like(target)
+    if plain and not approved:
         return None  # user option A: the deterministic rule applies to code-like names only; plain words take normal placement
     hits = [(name, row) for name, rows in subjects.items() for row in rows
             if any(_norm(target) == _norm(n) for n in [row['name'], *row.get('aliases', [])])]
+    if plain:
+        hits = [(name, row) for name, row in hits if (name, row.get('subject_id', row['name'])) in approved]
     order = {d['name']: i for i, d in enumerate(domains)}
     hits = [(name, row) for name, row in hits if name in order]
     if not hits:
         return None
     counts = counts or {}
-    trace = {'target': target, 'rule': 'exact-name', 'hits': [{'domain': d, 'subject': r['name'], 'units': counts.get((d, r['name']), 0)} for d, r in hits]}
+    trace = {'target': target, 'rule': 'exact-name-approved' if plain else 'exact-name', 'hits': [{'domain': d, 'subject': r['name'], 'units': counts.get((d, r['name']), 0)} for d, r in hits]}
     names = {d for d, _ in hits}
     if len(names) == 1:
         name, row = hits[0]; trace['chosen_by'] = 'only-home'
