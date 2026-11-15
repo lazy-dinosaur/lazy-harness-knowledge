@@ -73,6 +73,7 @@ class Ports:
     area_naming_context: bool = True  # Task363-N, default on (#20): catalog_names + one same-language re-ask, then hold
     shared_component_check: bool = False  # S003 review A: on in production(); hand-built ports opt in
     reserved_names: frozenset = frozenset()  # names a new domain may not take (upper-grouping names; p2-domain-place-4 defect)
+    taken_subject_names: frozenset = frozenset()  # normalized names/aliases of subjects in OTHER domains (stage 3, p2-warm-4)
 
 
 def model_view(value):
@@ -621,6 +622,12 @@ def cross_domain_home(unit, domains, subjects, ports=None, *, counts=None, appro
     return {'domain': next(d for d in domains if d['name'] == name), 'trace': trace}
 
 
+def subject_name_taken(name, ports):
+    """Stage 3 (user "a" after the eight-document stage-2 result): a NEW subject may not take a name or alias already held by
+    a subject in another domain (p2-warm-4 made three `병원` subjects). The caller supplies the other domains' names."""
+    return _norm(name) in (getattr(ports, 'taken_subject_names', None) or frozenset())
+
+
 def exact_identity(expression, catalog, trace):
     hits = [row for row in catalog if any(_norm(expression)==_norm(n) for n in [row['name'],*row.get('aliases',[])])]
     identities = {row.get('subject_id',row['name']) for row in hits}
@@ -930,6 +937,8 @@ def _place_identity_legacy(kind, unit, domain, catalog, ports, k, document=None)
             if named_hit:
                 existing=named_hit
                 trace['proposed_name_exact']=named_hit['name']
+            if kind=='subject' and not existing and subject_name_taken(name, ports):
+                raise PlacementHeld('E_SUBJECT_NAME_TAKEN: the proposed subject name belongs to a subject in another domain',trace)
             if kind=='domain' and not existing:
                 # Unlike top-K same-meaning, containment checks EVERY catalog domain.
                 covers=score_many(ports,{'proposed':proposed,'unit':working},

@@ -337,8 +337,13 @@ def run_place(ports, extract_report, base, *, out=None, top_k=5, on_row=None, sk
                 placement['domain'] = {'chosen': copy.deepcopy(home['domain']), 'new': False, 'one_home': home['trace']}
                 continue
             catalog = domains if kind == 'domain' else subjects.get(placement['domain']['chosen']['name'], [])
+            kports = uports
+            if kind == 'subject':
+                here = placement['domain']['chosen']['name']
+                kports = replace(uports, taken_subject_names=frozenset(
+                    w._norm(n) for d, rows_ in subjects.items() if d != here for r in rows_ for n in [r['name'], *(r.get('aliases') or [])]))
             try:
-                placement[kind] = w.place_identity(kind, unit, placement.get('domain', {}).get('chosen'), catalog, uports, top_k, document=text)
+                placement[kind] = w.place_identity(kind, unit, placement.get('domain', {}).get('chosen'), catalog, kports, top_k, document=text)
             except ValueError as exc:
                 placement[kind] = getattr(exc, 'trace', {}) or {}
                 held = {'where': kind, 'reason': str(exc)}
