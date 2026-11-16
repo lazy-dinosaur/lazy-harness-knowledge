@@ -71,7 +71,10 @@ await completeWriter(q,runtime,{fetch:async(_url,init)=>{const wire=JSON.parse(i
   assert.ok(!JSON.stringify(wire.input[0]).includes('AGENTS source-only harness phrase'));
   return sse(JSON.stringify(captures[0].reply));}}); checks++;
 await assert.rejects(()=>completeWriter(captures[0].request,runtime,{fetch:async()=>sse('{}',false)}),e=>e instanceof HostFailure && e.code==='E_WRITER_COST_UNKNOWN'); checks++;
-await assert.rejects(()=>completeWriter(captures[0].request,runtime,{fetch:async()=>{throw new Error('timeout');}}),e=>e instanceof HostFailure && e.code==='E_WRITER_COMPLETION'); checks++;
+await assert.rejects(()=>completeWriter(captures[0].request,runtime,{fetch:async()=>{throw new Error('timeout');}}),e=>e instanceof HostFailure && e.code==='E_WRITER_COMPLETION' && e.detail?.stopReason==='error'); checks++;
+// p2-s4-1: the failure says why, with secrets redacted.
+await assert.rejects(()=>completeWriter(captures[0].request,runtime,{fetch:async()=>{throw new Error('boom sk-PRIVATESECRET123456 Bearer abc.def');}}),
+  e=>e.code==='E_WRITER_COMPLETION' && !JSON.stringify(e.detail).includes('PRIVATESECRET') && !JSON.stringify(e.detail).includes('abc.def')); checks++;
 const unknown=structuredClone(captures[0].request); unknown.context.tools=[{name:'read'}];
 await assert.rejects(()=>completeWriter(unknown,runtime,{fetch:forbidden}),e=>e.code==='E_WRITER_INPUT');checks++;
 assert.throws(()=>inspectRuntime({getError:()=>null,getPhysicalModel:()=>undefined}),e=>e.code==='E_WRITER_UNSUPPORTED');checks++;

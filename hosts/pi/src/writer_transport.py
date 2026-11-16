@@ -115,7 +115,8 @@ def make_writer(paid, *, inspect=None, send=None):
             try:
                 response = send(request)
                 if not response.get('ok'):
-                    raise WriterFailure(response.get('code', 'E_WRITER_TRANSPORT'))
+                    detail = response.get('detail')  # host-redacted stop reason / part types (p2-s4-1)
+                    raise WriterFailure(response.get('code', 'E_WRITER_TRANSPORT'), json.dumps(detail, ensure_ascii=False) if isinstance(detail, dict) else '')
                 cost = response.get('cost')
                 if type(cost) not in (int, float) or not math.isfinite(cost) or cost < 0:
                     raise WriterFailure('E_WRITER_COST_UNKNOWN')

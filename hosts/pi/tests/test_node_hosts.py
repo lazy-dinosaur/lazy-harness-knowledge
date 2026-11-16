@@ -34,6 +34,12 @@ class NodeHosts(unittest.TestCase):
             out = subprocess.run(['node', str(HERE / 'test_active_worker_host_offline.mjs'), tmp, str(rt)], capture_output=True, text=True)
             self.assertEqual(out.returncode, 0, out.stderr[-2000:])
 
+    def test_writer_host_completion_detail(self):
+        """p2-s4-1: the writer host reports why a completion failed, with secrets redacted (no Pi runtime needed)."""
+        out = subprocess.run(['node', str(HERE / 'test_writer_host_detail_offline.mjs')], capture_output=True, text=True)
+        self.assertEqual(out.returncode, 0, out.stderr[-2000:])
+        self.assertIn('"checks":3', out.stdout)
+
     @unittest.skip('the writer capture producer (caller-capture.json) was not found in the source folder; tracked in issue #1 P0')
     def test_writer_host_replays_python_packets(self):
         pass
