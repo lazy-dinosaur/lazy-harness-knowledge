@@ -92,7 +92,15 @@ class Ledger:
         """Main-only explicit decision: release an uncertain reservation of an idempotent embedding call."""
         rows = self._effect_rows(ident)
         if not rows or rows[-1]['state'] != 'reserved': raise Stop('only an uncertain reservation can be released')
-        if rows[-1]['step'] != 'embedding': raise Stop('release is allowed only for idempotent embedding calls')
+        if rows[-1]['step'] != 'embedding':
+            # p2-s4-1 (user option A): a SUBSCRIPTION call the provider rejected for its usage limit produced nothing and
+            # cost no cash; with that evidence Main may release it so the same request can be sent once after the reset.
+            if (rows[-1].get('account') == 'subscription' and isinstance(evidence, dict) and evidence.get('stopReason') == 'error'
+                    and 'usage limit' in str(evidence.get('errorMessage', '')).lower()):
+                self.append(dict(id=ident, step=rows[-1]['step'], state='released', charge=0, reason=str(reason)[:300],
+                                 error_evidence=evidence, resolution='subscription-usage-limit-rejected'))
+                return
+            raise Stop('release is allowed only for idempotent embedding calls or a subscription call rejected for its usage limit')
         details = {}
         charge = rows[-1]['charge']
         if evidence is not None:
