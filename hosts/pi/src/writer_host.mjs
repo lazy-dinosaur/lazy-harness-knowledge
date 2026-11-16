@@ -4,8 +4,12 @@ import { resolve } from 'node:path';
 
 export const MODEL_ID = 'gpt-6-luna';
 export class HostFailure extends Error {
-  constructor(code) { super(code); this.code = code; }
+  constructor(code, detail) { super(code); this.code = code; if (detail) this.detail = detail; }
 }
+// p2-s4-1: a completion failure records WHY (stop reason, part types, a redacted short SDK message), never credentials.
+const redact = s => String(s || '').replace(/(sk|pk|rk)-[A-Za-z0-9_-]{6,}/g, '[redacted]').replace(/Bearer\s+\S+/gi, 'Bearer [redacted]').slice(0, 160);
+const completionDetail = message => ({stopReason: message?.stopReason ?? null, parts: (message?.content || []).map(p => p.type),
+  errorMessage: message?.errorMessage ? redact(message.errorMessage) : null});
 const fail = code => { throw new HostFailure(code); };
 const finite = n => typeof n === 'number' && Number.isFinite(n) && n >= 0;
 
@@ -69,12 +73,12 @@ export async function completeIsolated(request, runtime, validate, {fetch, signa
     },
   });
   if (!authResolved) fail('E_WRITER_AUTH');
-  if (message.stopReason !== 'stop' || message.content?.some(p => !['text', 'thinking'].includes(p.type))) fail('E_WRITER_COMPLETION');
+  if (message.stopReason !== 'stop' || message.content?.some(p => !['text', 'thinking'].includes(p.type))) throw new HostFailure('E_WRITER_COMPLETION', completionDetail(message));
   const usage = message.usage;
   if (!usageSeen || !usage || !['input', 'output', 'cacheRead', 'cacheWrite', 'totalTokens'].every(k => finite(usage[k])) ||
       !usage.cost || !['input', 'output', 'cacheRead', 'cacheWrite', 'total'].every(k => finite(usage.cost[k]))) fail('E_WRITER_COST_UNKNOWN');
   const text = message.content.filter(p => p.type === 'text').map(p => p.text).join('\n');
-  if (!text.trim()) fail('E_WRITER_COMPLETION');
+  if (!text.trim()) throw new HostFailure('E_WRITER_COMPLETION', {...completionDetail(message), emptyText: true});
   return {ok: true, text, cost: usage.cost.total};
 }
 
@@ -102,7 +106,8 @@ async function main() {
     return await completeWriter(request, await loadRuntime(process.argv[2]));
   } catch (error) {
     // Never serialize SDK auth errors, headers, credential commands, or secret config.
-    return {ok: false, code: error instanceof HostFailure ? error.code : 'E_WRITER_TRANSPORT'};
+    if (error instanceof HostFailure) return error.detail ? {ok: false, code: error.code, detail: error.detail} : {ok: false, code: error.code};
+    return {ok: false, code: 'E_WRITER_TRANSPORT'};
   }
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
