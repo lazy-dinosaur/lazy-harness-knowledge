@@ -9,6 +9,7 @@ the user passed are promoted into the next named snapshot. Nothing here calls a 
 supplies ports (offline fakes in tests, broker-accounted production ports for a separately approved live stage).
 """
 import copy
+import re
 from dataclasses import replace
 from pathlib import Path
 from uuid import uuid5, NAMESPACE_URL
@@ -523,6 +524,10 @@ def run_ground(ports, write_report, place_report, extract_report, *, out=None, h
                                     modality_advice=None if modality_veto else advice)
             except (ValueError, TypeError, KeyError) as exc:
                 return None, {'errors': [{'code': 'E_WRITE_FORM', 'detail': str(exc)}]}
+            # p2-s4-3 R01 #1 (user option A): every `code` value of the unit must survive into the sentence (no model call).
+            missing = [c for c in re.findall(r'`([^`]+)`', unit.get('content') or '') if c not in (f.get('fact') or '')]
+            if missing:
+                return None, {'errors': [{'code': 'E_CODE_VALUE_MISSING', 'detail': 'source code values missing from the sentence: ' + ', '.join(missing[:5])}]}
             q = check_many([f], text, ports.ground or ports.ask, check_identity=False)[0]
             if not q['errors']:
                 repair_citations(f, q, text)

@@ -224,7 +224,10 @@ def lint_fact(fact, strict_refs=False):
     if fact.get("kind") in MULTI_EVIDENCE_KINDS and len({(r.get("type"), r.get("locator")) for r in refs}) < 2:
         errors.append({"code": "E_EVIDENCE_COUNT", "where": "evidence_refs",
                        "detail": "decision/constraint needs >=2 distinct evidence refs (who decided + what was decided)"})
-    if fact.get("kind") == "decision" and (not isinstance(fact.get("why"), str) or not fact["why"].strip()):
+    # p2-s5-1 (user option A): a decision taken from a source document keeps only the reason the document states;
+    # requiring `why` there forced invented reasons. Conversation-derived decisions still need their stated reason.
+    if (fact.get("kind") == "decision" and fact.get("evidence_source") != "official_doc"
+            and (not isinstance(fact.get("why"), str) or not fact["why"].strip())):
         errors.append({"code": "E_WHY", "where": "why", "detail": "decision needs why (the stated reason)"})
     if fact.get("evidence_source") == "user_confirmed":
         # Standard v1 §1.1 criterion 7 (revision 3, 2026-09-27): EVERY cited user utterance must be a non-question.
