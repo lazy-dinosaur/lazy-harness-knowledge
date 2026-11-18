@@ -208,9 +208,26 @@ _TOK = re.compile(r"\b(EVEN IF|EXCEPT WHEN|IF|THEN|AND|OR|BEFORE|AFTER|BECAUSE)\
 _TICK = re.compile(r"`[^`]*`")
 
 
+_PAREN_SPAN = re.compile(r"\([^()]*\)")
+
+
+def _prose_spans(text, ticks):
+    """p2-s5-1: '(30-bit)' inside a leaf is prose, not grouping. A parenthesis pair is grouping only when it encloses an
+    operator outside `code`; any other pair is text."""
+    spans = []
+    for m in _PAREN_SPAN.finditer(text):
+        if any(a <= m.start() < b for a, b in ticks):
+            continue
+        inner = [o for o in OPS.finditer(m.group(0)) if not any(a <= m.start() + o.start() < b for a, b in ticks)]
+        if not inner:
+            spans.append((m.start(), m.end()))
+    return spans
+
+
 def _tokens(text):
     out, pos = [], 0
     ticks = [(m.start(), m.end()) for m in _TICK.finditer(text)]
+    ticks = ticks + _prose_spans(text, ticks)
     for m in _TOK.finditer(text):
         if any(a <= m.start() < b for a, b in ticks):
             continue  # operators and parentheses inside `code` are text
