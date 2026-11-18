@@ -3,7 +3,7 @@ import hashlib
 import json
 
 SCHEMA_VERSION = 'unit-writer/1'
-PROMPT_VERSION = 'unit-writer-prompt/10'
+PROMPT_VERSION = 'unit-writer-prompt/11'
 MODEL = 'openai/gpt-6-luna:medium'
 OUTPUT_FIELDS = frozenset(('fact', 'keywords', 'source_ranges', 'reason', 'why'))
 SYSTEM = '''역할: 이미 선택된 대상에 관한 원문 내용을 최초 규격화하는 작성자다. 재작성도 동일 대상이다.
@@ -52,7 +52,11 @@ SYSTEM += ('\n[행위자 보존] chosen_subject.name은 문장에 넣되, 원문
            '여러 규칙을 AND로 묶지 않는다. unit content가 표 칸·짧은 조각이면 그 칸이 말하는 주장 하나만 쓴다(행 이름·열 제목은 이해에만 쓴다).'
            '\n[세기 보존] 파일·구성요소 역할 목록 줄(“`path` — …”)과 동작 설명은 역할·동작 서술(현재형)로 쓰고 의무로 바꾸지 않는다. 원문에 없는 ‘해야 한다’를 만들지 않는다.'
            '\n[코드 값 보존] unit content에 있는 코드 식별자·파일 경로·API 경로·값(예: `CodeInput`, `src/main/ipc/notification.ts`, `/api/v1/auth/exchange`, `03080614`)은 '
-           '선택 주어로 대상을 부르더라도 fact에 빠짐없이 원문 그대로 남긴다.')
+           '선택 주어로 대상을 부르더라도 fact에 빠짐없이 원문 그대로 남긴다.'
+           '\n[결정 항목] 원문이 선택된 방향·계획·결정 목록(예: “the selected direction is: 1. Add … 2. Defer …”)이면 그 항목을 결정으로 쓴다(“…하기로 한다”, “…해야 한다” 등 원문의 세기). '
+           '현재 동작(“…한다”)이나 선택 대상 자신의 행위(“활성화 API는 … 검증을 추가한다”)로 바꾸지 않는다. '
+           '예: ‘2. Add real issued-code validation via homepage `POST /api/v1/activate`.’, 주어 ‘활성화 API’ → ‘활성화 API는 homepage `POST /api/v1/activate`를 통한 실제 발급 코드 검증에 쓰기로 한다.’ '
+           '원문에 없는 조건(예: ‘온보딩 성공 시’)을 덧붙이지 않는다.')
 
 
 

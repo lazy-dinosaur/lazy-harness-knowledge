@@ -7,7 +7,7 @@ import writer_worker as ww
 
 class StageFourRules(unittest.TestCase):
     def test_prompt_version_and_binding_moved(self):
-        self.assertEqual(ww.PROMPT_VERSION, 'unit-writer-prompt/10')
+        self.assertEqual(ww.PROMPT_VERSION, 'unit-writer-prompt/11')
         self.assertEqual(ww.BINDING, ww.digest([ww.SCHEMA_VERSION, ww.PROMPT_VERSION, ww.SYSTEM, ww.MODEL]))
 
     def test_four_rules_present(self):

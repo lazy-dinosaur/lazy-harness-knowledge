@@ -497,7 +497,7 @@ def run_write(ports, place_report, extract_report, *, out=None):
     return report
 
 
-def run_ground(ports, write_report, place_report, extract_report, *, out=None, home=None):
+def run_ground(ports, write_report, place_report, extract_report, *, out=None, home=None, modality_veto=False):
     """Stage 5: whole-document Q1/Q2 (source_grounding.check_many) with the pipeline's single rewrite (do_ground)."""
     from source_grounding import check_many, repair_citations
     baseline_ports(ports)
@@ -513,9 +513,14 @@ def run_ground(ports, write_report, place_report, extract_report, *, out=None, h
         unit = units[row['unit_id']]; placement = places[row['unit_id']]['trace']; text = extract_report['sources'][row['record_id']]
         record = _record(extract_report, row['record_id']); written = row['written']
 
+        advice = {}
+
         def check(answer, original=None):
+            # user option A: the stage-4 modality/fidelity judgement is advisory here (recorded, not a veto);
+            # modality_veto=True restores the old blocking behaviour.
             try:
-                f = w.validate_fact(record, home, unit, placement, copy.deepcopy(answer), original)
+                f = w.validate_fact(record, home, unit, placement, copy.deepcopy(answer), original,
+                                    modality_advice=None if modality_veto else advice)
             except (ValueError, TypeError, KeyError) as exc:
                 return None, {'errors': [{'code': 'E_WRITE_FORM', 'detail': str(exc)}]}
             q = check_many([f], text, ports.ground or ports.ask, check_identity=False)[0]
@@ -542,6 +547,8 @@ def run_ground(ports, write_report, place_report, extract_report, *, out=None, h
                 delta = {}; fact = None; final = {'errors': [{'code': 'E_REWRITE', 'detail': str(exc)}]}
             result.update(rewritten=True, rewrite=delta, final=final, fact=fact)
         result['held'] = result['final']['errors'] or None
+        if advice:
+            result['modality_advice'] = dict(advice)
         rows.append(result)
     report = _sealed({'version': VERSION, 'stage': 'ground', 'write_sha': write_report['sha'], 'rows': rows})
     if out is not None:

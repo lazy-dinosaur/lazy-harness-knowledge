@@ -114,6 +114,19 @@ def review(choose, unit, sentence, kind, source, *, normal_policy=None):
             'accepted': faithful and mode in KINDS and kind in KINDS[mode] and (force is None or mode == force)}
 
 
+def advise(receipt, unit, sentence, kind, source):
+    """Advisory form (user option A after the R01 stage-4 source review: the fidelity judge rejected 11 faithful
+    sentences and accepted no wrong one). The receipt must still be THIS sentence's own receipt (version + binding);
+    its verdict is returned as a note instead of a veto. The final source check is stage 5 (Q1/Q2)."""
+    if (not isinstance(receipt, dict) or receipt.get('version') != VERSION
+            or receipt.get('binding') != binding(unit, sentence, kind, source)):
+        raise ValueError('E_SOURCE_MODALITY: missing or foreign modality receipt')
+    fid = receipt.get('fidelity') or {}
+    return {'accepted': receipt.get('accepted') is True, 'fidelity_accepted': fid.get('accepted') is True,
+            'mode': (receipt.get('source_intent') or {}).get('mode'), 'kind': kind,
+            'supported': (fid.get('probabilities') or {}).get('supported')}
+
+
 def require(receipt, unit, sentence, kind, source):
     sdk = ((receipt or {}).get('fidelity') or {}).get('sdk_review')
     if (unit.get('atomic_child') or {}).get('source_sha256') and sdk is None:

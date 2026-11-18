@@ -1034,11 +1034,16 @@ def fact_kind(ports, unit, answer, *, source=None):
 
 
 @unit_first_metadata()
-def validate_fact(record, home, unit, placement, patch, original=None):
+def validate_fact(record, home, unit, placement, patch, original=None, *, modality_advice=None):
     import generation as p, runner
     raw = copy.deepcopy(original or {}); raw.update(copy.deepcopy(patch))
-    from source_modality import require
-    require(raw.pop('_source_modality', None), unit, raw.get('fact'), raw.get('kind'), source(record, home))
+    from source_modality import require, advise
+    receipt = raw.pop('_source_modality', None)
+    if modality_advice is not None:
+        # Stagewise stage 5: the modality verdict is a recorded note; Q1/Q2 decide (user option A).
+        modality_advice.update(advise(receipt, unit, raw.get('fact'), raw.get('kind'), source(record, home)))
+    else:
+        require(receipt, unit, raw.get('fact'), raw.get('kind'), source(record, home))
     d = placement['domain']['chosen']; s = placement['subject']['chosen']
     if patch.get('subject',s['name']) != s['name']: raise ValueError('rewrite cannot rename subject')
     if any(key in patch for key in ('identity_ref','subject_id','host_id','domain','assigned_area','aliases','domain_aliases','subject_provisional','leaf_links','source_unit')):
