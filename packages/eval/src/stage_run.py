@@ -7,11 +7,12 @@ wraps the writer/worker factories (P4 ports). Real transports come from the host
 
 Plan (JSON, kept outside the repository, e.g. in the state home)::
 
-    {"run": "r1", "stage": "extract" | "place" | "write", "host": "knowledge-local",
+    {"run": "r1", "stage": "extract" | "place" | "write" | "ground", "host": "knowledge-local",
      "records": [{"record_id": "S1", "path": "docs/a.md", "sha256": "..."}],   # documents under <inputs>/v1
      "extracts": {"S1": "<path to approved stage-1 report>"},               # place only
      "base": "<path to snapshot>",                                         # place only
-     "places": {"S1": "<path to place report>"}, "place_approval": "<user ref>",  # write only (stage 4)
+     "places": {"S1": "<path to place report>"}, "place_approval": "<user ref>",  # write and ground
+     "writes": {"S1": "<path to write report>"}, "write_approval": "<user ref>",  # ground only (stage 5)
      "caps": {"sdk": 10, "jev_http": 100, "embedding_post": 10, "embedding_inputs": 100},
      "cash_cap_usd": 0.05, "absolute_ceiling_usd": 1.0, "prior_spent_usd": 0.93, "jev_reserve_usd": 0.0347,
      "approval": "<user approval reference>", "resume": false}
@@ -40,8 +41,8 @@ def _num(value, name):
 
 def check_plan(plan, *, dry):
     """Refuse an under-specified or over-budget plan before any effect."""
-    if plan.get('stage') not in ('extract', 'place', 'write'):
-        raise Stop('plan: stage must be extract, place or write')
+    if plan.get('stage') not in ('extract', 'place', 'write', 'ground'):
+        raise Stop('plan: stage must be extract, place, write or ground')
     if not isinstance(plan.get('run'), str) or not plan['run'].strip():
         raise Stop('plan: run name required')
     if not plan.get('records'):
@@ -59,6 +60,13 @@ def check_plan(plan, *, dry):
         raise Stop('plan: a paid run needs the user approval reference')
     if plan['stage'] == 'place' and (not plan.get('extracts') or not plan.get('base')):
         raise Stop('plan: place needs approved extracts and a base snapshot')
+    if plan['stage'] == 'ground':
+        recs = set(plan.get('extracts') or {})
+        if not recs or set(plan.get('places') or {}) != recs or set(plan.get('writes') or {}) != recs:
+            raise Stop('plan: ground needs an approved extract, a place report and a write report for every record')
+        for key in ('place_approval', 'write_approval'):
+            if not (isinstance(plan.get(key), str) and plan[key].strip()):
+                raise Stop('plan: ground needs the user approval reference ' + key)
     if plan['stage'] == 'write':
         if not plan.get('extracts') or not plan.get('places') or set(plan['places']) != set(plan['extracts']):
             raise Stop('plan: write needs an approved extract and a place report for every record')
@@ -206,6 +214,29 @@ def run(plan, *, dry, ports_factory, out_dir=None, broker=None):
             for rec in load_records(plan):
                 report = sw.run_extract(ports, [rec], host=plan.get('host', 'knowledge-local'))
                 save(out / ('stage1-extract-%s.json' % rec['record_id']), report); reports[rec['record_id']] = report['sha']
+        elif plan['stage'] == 'ground':
+            # Stage 5 (whole-document Q1/Q2 with one rewrite): place AND write reports passed by the user (principle 1).
+            # The modality verdict is advisory here (stagewise default, user option A); the scratch source home is removed.
+            import shutil
+            resuming = bool(plan.get('resume')) and not dry
+            for rid, path in plan['extracts'].items():
+                done = out / ('stage5-ground-%s.json' % rid)
+                if resuming and done.exists():
+                    report = load(done)
+                else:
+                    extract = load(Path(path))
+                    place = load(Path(plan['places'][rid])); write = load(Path(plan['writes'][rid]))
+                    if not place.get('approval'):
+                        place = sw.approve(place, plan['place_approval'])
+                    if not write.get('approval'):
+                        write = sw.approve(write, plan['write_approval'])
+                    home = sw._home(extract)
+                    try:
+                        report = sw.run_ground(ports, write, place, extract, home=home)
+                    finally:
+                        shutil.rmtree(home, True)
+                    save(done, report)
+                reports[rid] = report['sha']
         elif plan['stage'] == 'write':
             # Stage 4 (first writing + Jev kind): place reports are passed by the user before this stage (principle 1);
             # stage 5 (Q1/Q2 ground) needs the user-passed write report and is a separate stage.
