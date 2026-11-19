@@ -16,7 +16,7 @@ class ImportedCondition(unittest.TestCase):
         self.assertIn('source_lines', sw.IMPORTED_CONDITION_QUESTION)
 
     def test_writer_must_not_actor_rule(self):
-        self.assertEqual(ww.PROMPT_VERSION, 'unit-writer-prompt/12')
+        self.assertEqual(ww.PROMPT_VERSION, 'unit-writer-prompt/13')
         self.assertIn('[금지 항목 행위자]', ww.SYSTEM)
         self.assertIn('혼동되어서는 안 된다', ww.SYSTEM)
 

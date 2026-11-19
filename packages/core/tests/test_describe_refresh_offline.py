@@ -90,7 +90,7 @@ class DescriptionShape(unittest.TestCase):
 
     def test_prompt_asks_for_scope_only(self):
         import active_worker as aw
-        self.assertIn('범위', aw.PROMPTS['describe']); self.assertEqual(aw.PROMPT_VERSION, 'active-worker-prompt/13')
+        self.assertIn('범위', aw.PROMPTS['describe']); self.assertEqual(aw.PROMPT_VERSION, 'active-worker-prompt/14')
 
 
 if __name__ == '__main__':

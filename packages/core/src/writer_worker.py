@@ -3,7 +3,7 @@ import hashlib
 import json
 
 SCHEMA_VERSION = 'unit-writer/1'
-PROMPT_VERSION = 'unit-writer-prompt/12'
+PROMPT_VERSION = 'unit-writer-prompt/13'
 MODEL = 'openai/gpt-6-luna:medium'
 OUTPUT_FIELDS = frozenset(('fact', 'keywords', 'source_ranges', 'reason', 'why'))
 SYSTEM = '''역할: 이미 선택된 대상에 관한 원문 내용을 최초 규격화하는 작성자다. 재작성도 동일 대상이다.
@@ -44,22 +44,24 @@ SYSTEM += ('\n규범 규정이 기본값을 요구하고 선언형 계약이 동
 from source_context_policy import GUIDANCE as CONTEXT_GUIDANCE
 SYSTEM += '\n'+CONTEXT_GUIDANCE
 # Stage 4 (user option A after p2-s4-1: 20 of 47 drafts failed source fidelity for these four reasons).
+# Examples are NEUTRAL (fictional order/shipping service): the module is host-independent (user 2026-11-14:
+# '우리 지시문에 그런건 없어야해 … 보편적으로 다른곳에서도 사용할껌'); `prompt_leak` checks a host corpus.
 SYSTEM += ('\n[행위자 보존] chosen_subject.name은 문장에 넣되, 원문에서 의무·동작을 수행하는 쪽(구현·코드·컴포넌트·사용자)을 선택 대상으로 바꾸지 않는다. '
            '선택 대상이 그 의무의 수행자가 아니면 대상은 의무의 대상으로 쓴다(예: “X는 …되어야 한다”, “X에 대해 …해야 한다”). '
            '예: 원문 ‘Must: distinguish A from B’, 선택 주어 A → ‘A는 B와 구별되어야 한다.’; ‘A는 B를 구별해야 한다.’는 행위자 변경이다. '
-           '예: 원문 ‘Must: prefer the target user\'s fresh seats’, 선택 주어 ‘개인 호출’ → ‘개인 호출은 대상 사용자의 fresh seats로 우선 전달되어야 한다.’'
+           '예: 원문 ‘Must: prefer the customer\'s default address’, 선택 주어 ‘배송 요청’ → ‘배송 요청은 고객의 기본 주소로 우선 배정되어야 한다.’'
            '\n[항목 하나] 이 unit의 주장을 직접 지배하는 조건·제외만 가져온다. 같은 문서의 다른 항목·다른 표 칸·다른 절이 말하는 별개 규칙·속성·동작은 합치지 않는다. '
            '여러 규칙을 AND로 묶지 않는다. unit content가 표 칸·짧은 조각이면 그 칸이 말하는 주장 하나만 쓴다(행 이름·열 제목은 이해에만 쓴다).'
            '\n[세기 보존] 파일·구성요소 역할 목록 줄(“`path` — …”)과 동작 설명은 역할·동작 서술(현재형)로 쓰고 의무로 바꾸지 않는다. 원문에 없는 ‘해야 한다’를 만들지 않는다.'
-           '\n[코드 값 보존] unit content에 있는 코드 식별자·파일 경로·API 경로·값(예: `CodeInput`, `src/main/ipc/notification.ts`, `/api/v1/auth/exchange`, `03080614`)은 '
+           '\n[코드 값 보존] unit content에 있는 코드 식별자·파일 경로·API 경로·값(예: `OrderForm`, `src/app/order/form.ts`, `/api/v1/orders`, `20240101`)은 '
            '선택 주어로 대상을 부르더라도 fact에 빠짐없이 원문 그대로 남긴다.'
            '\n[결정 항목] 원문이 선택된 방향·계획·결정 목록(예: “the selected direction is: 1. Add … 2. Defer …”)이면 그 항목을 결정으로 쓴다(“…하기로 한다”, “…해야 한다” 등 원문의 세기). '
-           '현재 동작(“…한다”)이나 선택 대상 자신의 행위(“활성화 API는 … 검증을 추가한다”)로 바꾸지 않는다. '
-           '예: ‘2. Add real issued-code validation via homepage `POST /api/v1/activate`.’, 주어 ‘활성화 API’ → ‘활성화 API는 homepage `POST /api/v1/activate`를 통한 실제 발급 코드 검증에 쓰기로 한다.’ '
-           '원문에 없는 조건(예: ‘온보딩 성공 시’)을 덧붙이지 않는다.'
+           '현재 동작(“…한다”)이나 선택 대상 자신의 행위(“재고 API는 … 검증을 추가한다”)로 바꾸지 않는다. '
+           '예: ‘2. Add stock validation via `POST /api/v1/stock/check`.’, 주어 ‘재고 API’ → ‘재고 API는 `POST /api/v1/stock/check`를 통한 재고 검증에 쓰기로 한다.’ '
+           '원문에 없는 조건(예: ‘결제 성공 시’)을 덧붙이지 않는다.'
            '\n[금지 항목 행위자] Must not 항목에서 선택 대상이 금지된 동작의 수행자가 아니면 대상은 동작을 받는 쪽으로 쓴다. '
            '예: ‘Must not: conflate A with B’, 주어 B → ‘B는 A와 혼동되어서는 안 된다.’; ‘B는 A와 …를 혼동해서는 안 된다.’는 행위자 변경이다. '
-           '예: ‘Must not: equate burst-summary presentation with user-read’, 주어 ‘개인 호출’ → ‘개인 호출의 burst-summary presentation은 user-read와 동일시되어서는 안 된다.’ '
+           '예: ‘Must not: equate a shipping notice with customer receipt’, 주어 ‘배송 알림’ → ‘배송 알림의 표시는 고객 수령과 동일시되어서는 안 된다.’ '
            '수행자가 원문에 없는 배포·구현자일 때도 같다.')
 
 
