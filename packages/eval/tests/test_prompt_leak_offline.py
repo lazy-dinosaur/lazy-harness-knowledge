@@ -17,7 +17,7 @@ class PromptLeak(unittest.TestCase):
 
     def test_clean_prompt(self):
         self.assertEqual(pl.scan(CORPUS, {'w': ww.SYSTEM}), {})
-        self.assertEqual(ww.PROMPT_VERSION, 'unit-writer-prompt/13')
+        self.assertEqual(ww.PROMPT_VERSION, 'unit-writer-prompt/14')
 
 
 if __name__ == '__main__':
