@@ -37,7 +37,7 @@ class Advisory(unittest.TestCase):
         self.assertIn("result['modality_advice']", inspect.getsource(sw.run_ground))
 
     def test_writer_decision_rule(self):
-        self.assertEqual(ww.PROMPT_VERSION, 'unit-writer-prompt/11')
+        self.assertEqual(ww.PROMPT_VERSION, 'unit-writer-prompt/12')
         self.assertIn('[결정 항목]', ww.SYSTEM)
         self.assertIn('온보딩 성공 시', ww.SYSTEM)
 

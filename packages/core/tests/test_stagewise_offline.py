@@ -96,11 +96,11 @@ class StagewiseWriting(unittest.TestCase):
     def test_write_and_ground_match_the_pipeline_without_holds(self):
         ports, extract, place = self.chain()
         with self.assertRaisesRegex(ValueError, 'not passed by the user'):
-            sw.run_ground(ports, sw.run_write(ports, place, extract), place, extract, home=self.home)
+            sw.run_ground(ports, sw.run_write(ports, place, extract), place, extract, home=self.home, imported_check=False)
         write = sw.approve(sw.run_write(ports, place, extract), 'u3')
         self.assertTrue(all(r['modality']['accepted'] for r in write['rows']))
         self.assertEqual([r['kind'] for r in write['rows']], ['fact', 'fact', 'fact'])
-        ground = sw.run_ground(ports, write, place, extract, home=self.home)
+        ground = sw.run_ground(ports, write, place, extract, home=self.home, imported_check=False)
         self.assertTrue(all(r['held'] is None for r in ground['rows']), [r['held'] for r in ground['rows']])
         self.assertIn('예약 시트', ground['rows'][0]['fact']['fact'])
         self.assertEqual(ground['rows'][0]['fact']['domain'], '주문관리')
@@ -109,11 +109,11 @@ class StagewiseWriting(unittest.TestCase):
         _, extract, place = self.chain()
         leaky = previous.Fake(TEXT, leak=True, repair=False).ports()
         write = sw.approve(sw.run_write(leaky, place, extract), 'u3')
-        ground = sw.run_ground(leaky, write, place, extract, home=self.home)
+        ground = sw.run_ground(leaky, write, place, extract, home=self.home, imported_check=False)
         row = ground['rows'][2]
         self.assertTrue(row['rewritten']); self.assertTrue(row['held'])
         fixed = previous.Fake(TEXT, leak=True).ports()
-        ground = sw.run_ground(fixed, sw.approve(sw.run_write(fixed, place, extract), 'u3'), place, extract, home=self.home)
+        ground = sw.run_ground(fixed, sw.approve(sw.run_write(fixed, place, extract), 'u3'), place, extract, home=self.home, imported_check=False)
         self.assertTrue(ground['rows'][2]['rewritten']); self.assertIsNone(ground['rows'][2]['held'])
 
 

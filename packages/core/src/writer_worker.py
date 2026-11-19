@@ -3,7 +3,7 @@ import hashlib
 import json
 
 SCHEMA_VERSION = 'unit-writer/1'
-PROMPT_VERSION = 'unit-writer-prompt/11'
+PROMPT_VERSION = 'unit-writer-prompt/12'
 MODEL = 'openai/gpt-6-luna:medium'
 OUTPUT_FIELDS = frozenset(('fact', 'keywords', 'source_ranges', 'reason', 'why'))
 SYSTEM = '''역할: 이미 선택된 대상에 관한 원문 내용을 최초 규격화하는 작성자다. 재작성도 동일 대상이다.
@@ -56,7 +56,11 @@ SYSTEM += ('\n[행위자 보존] chosen_subject.name은 문장에 넣되, 원문
            '\n[결정 항목] 원문이 선택된 방향·계획·결정 목록(예: “the selected direction is: 1. Add … 2. Defer …”)이면 그 항목을 결정으로 쓴다(“…하기로 한다”, “…해야 한다” 등 원문의 세기). '
            '현재 동작(“…한다”)이나 선택 대상 자신의 행위(“활성화 API는 … 검증을 추가한다”)로 바꾸지 않는다. '
            '예: ‘2. Add real issued-code validation via homepage `POST /api/v1/activate`.’, 주어 ‘활성화 API’ → ‘활성화 API는 homepage `POST /api/v1/activate`를 통한 실제 발급 코드 검증에 쓰기로 한다.’ '
-           '원문에 없는 조건(예: ‘온보딩 성공 시’)을 덧붙이지 않는다.')
+           '원문에 없는 조건(예: ‘온보딩 성공 시’)을 덧붙이지 않는다.'
+           '\n[금지 항목 행위자] Must not 항목에서 선택 대상이 금지된 동작의 수행자가 아니면 대상은 동작을 받는 쪽으로 쓴다. '
+           '예: ‘Must not: conflate A with B’, 주어 B → ‘B는 A와 혼동되어서는 안 된다.’; ‘B는 A와 …를 혼동해서는 안 된다.’는 행위자 변경이다. '
+           '예: ‘Must not: equate burst-summary presentation with user-read’, 주어 ‘개인 호출’ → ‘개인 호출의 burst-summary presentation은 user-read와 동일시되어서는 안 된다.’ '
+           '수행자가 원문에 없는 배포·구현자일 때도 같다.')
 
 
 
