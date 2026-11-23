@@ -578,3 +578,48 @@ def run_ground(ports, write_report, place_report, extract_report, *, out=None, h
     if out is not None:
         save(Path(out) / 'ground.json', report)
     return report
+
+
+# ---------------------------------------------------------------- stage 6: store and re-find
+
+def run_store(store, ground_report, place_report, extract_report, *, host, out=None):
+    """Stage 6 (user option A): store the user-passed stage-5 facts and check they can be found again.
+
+    `store` is a port with four methods (the production adapter wraps the existing DB parts; tests inject a fake):
+      install(rows) -> {unit_id: hold_reason}      register domain / subject / aliases / vectors exactly as placed
+      record(unit_id, fact) -> entry_id | None    write one fact (no domain re-routing: the placed domain is final)
+      digest(unit_id, domain) -> dict             merge / contradiction / supersede inside that domain
+      find(text, k) -> [{unit_id, domain, subject, fact}]   re-find by the fact text
+    Domain and subject come from the stage-2/3 place report as passed by the user; nothing here re-decides them.
+    """
+    _approved(extract_report, 'extract'); _approved(place_report, 'place'); _approved(ground_report, 'ground')
+    places = {r['unit_id']: r for r in place_report['rows']}
+    rows, active = [], []
+    for g in ground_report['rows']:
+        if g.get('held') or not g.get('fact'):
+            rows.append({'unit_id': g['unit_id'], 'stored': False, 'reason': 'held before store'}); continue
+        tr = places[g['unit_id']]['trace']
+        fact = copy.deepcopy(g['fact'])
+        _need(fact.get('domain') == tr['domain']['chosen']['name'], 'fact domain differs from the passed placement')
+        active.append({'unit_id': g['unit_id'], 'fact': fact, 'domain': tr['domain']['chosen'], 'subject': tr['subject']['chosen']})
+    held = store.install(copy.deepcopy(active)) or {}
+    for a in active:
+        uid = a['unit_id']
+        if uid in held:
+            rows.append({'unit_id': uid, 'stored': False, 'reason': 'install: ' + str(held[uid])}); continue
+        entry = store.record(uid, copy.deepcopy(a['fact']))
+        if not entry:
+            rows.append({'unit_id': uid, 'stored': False, 'reason': 'record refused'}); continue
+        digest_result = store.digest(uid, a['domain']['name'])
+        hits = store.find(a['fact']['fact'], 5) or []
+        hit = next((h for h in hits if h.get('unit_id') == uid), None)
+        rows.append({'unit_id': uid, 'stored': True, 'entry_id': entry, 'digest': digest_result,
+                     'found': hit is not None, 'rank': (hits.index(hit) + 1) if hit else None,
+                     'path_ok': bool(hit) and hit.get('domain') == a['domain']['name'] and hit.get('subject') == a['subject']['name']})
+    stored = [r for r in rows if r.get('stored')]
+    summary = {'stored': len(stored), 'found': sum(r['found'] for r in stored), 'path_ok': sum(r['path_ok'] for r in stored),
+               'not_stored': len(rows) - len(stored)}
+    report = _sealed({'version': VERSION, 'stage': 'store', 'host': host, 'ground_sha': ground_report['sha'], 'rows': rows, 'summary': summary})
+    if out is not None:
+        save(Path(out) / 'store.json', report)
+    return report
