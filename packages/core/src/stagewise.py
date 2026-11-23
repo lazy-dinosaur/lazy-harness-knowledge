@@ -505,7 +505,7 @@ IMPORTED_CONDITION_QUESTION = (
 
 
 def run_ground(ports, write_report, place_report, extract_report, *, out=None, home=None, modality_veto=False,
-               imported_check=True):
+               imported_check=True, imported_veto=False):
     """Stage 5: whole-document Q1/Q2 (source_grounding.check_many) with the pipeline's single rewrite (do_ground)."""
     from source_grounding import check_many, repair_citations
     baseline_ports(ports)
@@ -544,7 +544,9 @@ def run_ground(ports, write_report, place_report, extract_report, *, out=None, h
                 p = w.score(ports, {'subject': placement['subject']['chosen'].get('name'), 'source_lines': own,
                                     'sentence': f.get('fact')}, IMPORTED_CONDITION_QUESTION)
                 q['imported_condition'] = p
-                if p >= .5:
+                # user option A after D03/D05 (scores cluster .50-.60; 11 correct rows flagged at .5): advisory by default,
+                # recorded per row; imported_veto=True restores the blocking behaviour.
+                if imported_veto and p >= .5:
                     q['errors'] = [{'code': 'E_IMPORTED_CONDITION', 'detail': 'the sentence adds a condition, alternative or qualifier that its own source lines do not state'}]
             if not q['errors']:
                 repair_citations(f, q, text)

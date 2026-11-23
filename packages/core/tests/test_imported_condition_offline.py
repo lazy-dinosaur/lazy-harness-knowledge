@@ -11,6 +11,8 @@ class ImportedCondition(unittest.TestCase):
     def test_question_runs_after_q1_q2_and_triggers_one_rewrite(self):
         src = inspect.getsource(sw.run_ground)
         self.assertIs(inspect.signature(sw.run_ground).parameters['imported_check'].default, True)
+        self.assertIs(inspect.signature(sw.run_ground).parameters['imported_veto'].default, False)  # advisory by default
+        self.assertIn("if imported_veto and p >= .5", src)
         self.assertIn('E_IMPORTED_CONDITION', src)
         self.assertLess(src.index('check_many('), src.index('IMPORTED_CONDITION_QUESTION'))
         self.assertIn('source_lines', sw.IMPORTED_CONDITION_QUESTION)
