@@ -21,10 +21,20 @@ class IdentityHeld(ValueError): pass
 
 @unit_first_metadata()
 def install(plan, home, dsn, host, completion, encode):
-    import store_pg as pg, subject_dict as sd, domain_router as dr, embed
     from area_catalog import install as seeds
-    from identity_ref import checked, resolve, add_spelling, IdentityError
     active = [r for r in completion['units'] if r.get('fact') and not r.get('held_reasons')]
+    held, traces = install_rows(dsn, host, active, encode, after_preflight=lambda: seeds(plan,home,dsn,host,encode),
+        on_held=lambda uid, value: save(home/'state/fact-dispositions'/(uid+'.json'), value))
+    save(home/'state/identity-install.json',{'held':held,'traces':traces})
+    return held
+
+
+@unit_first_metadata()
+def install_rows(dsn, host, active, encode, *, after_preflight=None, on_held=None):
+    """Identity preflight + domain/subject/alias/vector registration for placed rows ({unit_id, fact, domain:{chosen},
+    subject:{chosen}}). Shared by the old `install` (seeds the confirmed area catalog in between) and the stagewise store."""
+    import store_pg as pg, subject_dict as sd, domain_router as dr, embed
+    from identity_ref import checked, resolve, add_spelling, IdentityError
     # Reject spoofed refs before seeds, embeddings or any DB write.
     for row in active:
         ref=checked(row['subject']['chosen']['identity_ref'],host,row['domain']['chosen']['name'])
@@ -43,7 +53,7 @@ def install(plan, home, dsn, host, completion, encode):
                 obj=resolve(cur,ref,host,ref['domain'])
                 if obj['subject_id']==ref['subject_id'] and obj['name']!=subject['name']:
                     raise IdentityError('E_IDENTITY: selected display name changed')
-    seeds(plan,home,dsn,host,encode)
+    if after_preflight: after_preflight()
     # Preflight against final names too: a later canonical name cannot be stolen by an earlier alias.
     domains=list({r['domain']['chosen']['name']:r['domain']['chosen'] for r in active}.values())
     subjects={}
@@ -98,9 +108,8 @@ def install(plan, home, dsn, host, completion, encode):
         except (IdentityHeld,IdentityError) as exc:
             held[row['unit_id']]={'status':'held','errors':[{'code':'E_IDENTITY','where':'install','detail':str(exc)}],
                                   'unit_id':row['unit_id'],'input_sha':digest(row['fact']),'trace':trace}
-            save(home/'state/fact-dispositions'/(row['unit_id']+'.json'),held[row['unit_id']])
-    save(home/'state/identity-install.json',{'held':held,'traces':traces})
-    return held
+            if on_held: on_held(row['unit_id'], held[row['unit_id']])
+    return held, traces
 
 
 @unit_first_metadata()
