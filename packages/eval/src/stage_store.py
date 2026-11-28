@@ -77,6 +77,13 @@ class StageStore:
         return {uid: (v.get('errors') or [{}])[0].get('detail') for uid, v in held.items()}
 
     def record(self, unit_id, fact):
+        # p2-s6-2: the worktime check validates subject metadata; stagewise facts are unit-first (domain > subject, no
+        # subject_type), so every DB step runs inside the same unit-first scope the old absorb used.
+        from subject_contract import unit_first_metadata
+        with unit_first_metadata():
+            return self._record(unit_id, fact)
+
+    def _record(self, unit_id, fact):
         import knowledge_cli as cli, store_pg as pg, worktime_driver as wd
         from place_write_absorb import record_unit
         keys = ('fact', 'subject', 'domain', 'aliases', 'evidence_refs', 'identity_ref', 'subject_id', 'source_unit')
@@ -98,6 +105,11 @@ class StageStore:
         return result['entry_id']
 
     def digest(self, unit_id, domain):
+        from subject_contract import unit_first_metadata
+        with unit_first_metadata():
+            return self._digest(unit_id, domain)
+
+    def _digest(self, unit_id, domain):
         import digest_driver as dd, domain_router as dr
         # p2-s6-1: the partition actor only digests facts the router assigned (knowledge.digest_part). Facts carry
         # their identity_ref, so routing resolves the placed domain without any model call; a different domain stops.
