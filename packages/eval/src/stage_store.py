@@ -87,8 +87,18 @@ class StageStore:
     def install(self, rows):
         import embed
         from place_write_absorb import install_rows
-        active = [{'unit_id': r['unit_id'], 'fact': r['fact'], 'domain': {'chosen': r['domain']}, 'subject': {'chosen': r['subject']}}
-                  for r in rows]
+        import copy, store_pg as pg
+        # p2-s6-4 dry run: an approved-catalog subject marked `persisted` came from another DB; in this module DB it may
+        # not exist yet. Register it under its fixed subject_id (as `allocated`) when the id is absent here.
+        with pg.connect(self.dsn) as conn, conn.cursor() as cur:
+            cur.execute('select subject_id::text from knowledge.subject where host_id=%s', (self.host,))
+            present = {r[0] for r in cur.fetchall()}
+        active = []
+        for r in rows:
+            subject = copy.deepcopy(r['subject'])
+            if subject.get('identity_origin') != 'allocated' and subject.get('subject_id') not in present:
+                subject['identity_origin'] = 'allocated'
+            active.append({'unit_id': r['unit_id'], 'fact': r['fact'], 'domain': {'chosen': r['domain']}, 'subject': {'chosen': subject}})
         held, _ = install_rows(self.dsn, self.host, active, embed.encode_queries)
         return {uid: (v.get('errors') or [{}])[0].get('detail') for uid, v in held.items()}
 
