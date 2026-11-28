@@ -35,15 +35,31 @@ def fresh_db(plan, out):
         else: raise Stop('local DB readiness timeout')
         with pg.connect(dsn) as conn, conn.cursor() as cur:
             cur.execute('create schema if not exists extensions; create extension if not exists vector with schema extensions; create extension if not exists pg_trgm with schema extensions')
-        for migration in ldb.MIGRATIONS:
-            ldb.docker('cp', str(ldb.RUNNER/'migrations'/(migration+'.sql')), name+':/tmp/migration.sql')
-            ldb.docker('exec', name, 'psql', '-X', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'postgres', '-f', '/tmp/migration.sql')
-        ldb.preflight_validation_receipts(dsn)
-        with pg.connect(dsn) as conn, conn.cursor() as cur:
-            cur.execute('insert into knowledge.host(host_id,name,repo_locator) values(%s,%s,%s)', (host, host, str(out)))
-            # same relaxation as the unit-first pilot schema: stagewise subjects carry no subject_type
-            cur.execute('alter table knowledge.subject alter column subject_type drop not null')
-            cur.execute('alter table knowledge.subject drop constraint if exists subject_type_fixed')
+        restore = plan.get('restore_dump')
+        if restore:
+            # continue on the knowledge left by an earlier stage-6 run (its dump), e.g. to watch merge / conflict
+            meta = Path(restore).with_suffix('.json')
+            if not Path(restore).exists() or not meta.exists():
+                raise Stop('restore dump or its metadata missing')
+            from safety import load
+            if load(meta).get('sha256') != hashlib.sha256(Path(restore).read_bytes()).hexdigest():
+                raise Stop('restore dump hash mismatch')
+            ldb.docker('cp', str(restore), name+':/tmp/restore.dump')
+            ldb.docker('exec', name, 'pg_restore', '-U', 'postgres', '-d', 'postgres', '--no-owner', '--no-privileges', '--exit-on-error', '/tmp/restore.dump')
+            ldb.preflight_validation_receipts(dsn)
+            with pg.connect(dsn) as conn, conn.cursor() as cur:
+                cur.execute('select host_id from knowledge.host')
+                if cur.fetchall() != [(host,)]: raise Stop('restored dump belongs to another host')
+        else:
+            for migration in ldb.MIGRATIONS:
+                ldb.docker('cp', str(ldb.RUNNER/'migrations'/(migration+'.sql')), name+':/tmp/migration.sql')
+                ldb.docker('exec', name, 'psql', '-X', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'postgres', '-f', '/tmp/migration.sql')
+            ldb.preflight_validation_receipts(dsn)
+            with pg.connect(dsn) as conn, conn.cursor() as cur:
+                cur.execute('insert into knowledge.host(host_id,name,repo_locator) values(%s,%s,%s)', (host, host, str(out)))
+                # same relaxation as the unit-first pilot schema: stagewise subjects carry no subject_type
+                cur.execute('alter table knowledge.subject alter column subject_type drop not null')
+                cur.execute('alter table knowledge.subject drop constraint if exists subject_type_fixed')
         yield dsn
         raw = ldb.docker('exec', name, 'pg_dump', '-U', 'postgres', '-d', 'postgres', '-Fc', '-n', 'knowledge')
         Path(out).mkdir(parents=True, exist_ok=True)
