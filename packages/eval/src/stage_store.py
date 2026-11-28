@@ -98,7 +98,12 @@ class StageStore:
         return result['entry_id']
 
     def digest(self, unit_id, domain):
-        import digest_driver as dd
+        import digest_driver as dd, domain_router as dr
+        # p2-s6-1: the partition actor only digests facts the router assigned (knowledge.digest_part). Facts carry
+        # their identity_ref, so routing resolves the placed domain without any model call; a different domain stops.
+        parts = dr.route_pending(self.dsn, unit_id, None, None, self.adapt['embed_fn'])
+        if any(d != domain for _, d in parts):
+            raise Stop('routed domain differs from the passed placement: %s' % sorted({d for _, d in parts}))
         out = dd.run_digestion(self.dsn, unit_id, self.judge, domain=domain, maintenance=None, workers=1,
                                same=self.adapt['same'], embed_fn=self.adapt['embed_fn'])
         return {k: out.get(k) for k in ('decisions', 'absorbed', 'held', 'status') if isinstance(out, dict) and k in out} or {'done': True}
